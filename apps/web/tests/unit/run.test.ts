@@ -55,6 +55,7 @@ describe('run store', () => {
     applyProgress(token('fr', 'translate', 0, 'Bonjour'))
     applyProgress(token('fr', 'translate', 1, 'le monde'))
     applyProgress(started('fr', 'finalize', 0))
+    expect(previewChunks($previews.get().fr, 2)).toEqual(['Bonjour', 'le monde'])
     applyProgress(token('fr', 'finalize', 0, 'Salut'))
     applyProgress(token('fr', 'translate', 1, ' entier'))
     expect(previewChunks($previews.get().fr, 2)).toEqual(['Salut', 'le monde entier'])

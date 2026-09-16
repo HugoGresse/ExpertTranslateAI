@@ -50,7 +50,8 @@ export interface TargetPreview {
 export const $previews = map<Record<string, TargetPreview>>({})
 
 export const previewChunks = (preview: TargetPreview | undefined, chunkCount: number): string[] =>
-  Array.from({ length: chunkCount }, (_, i) => preview?.finalize[i] ?? preview?.translate[i] ?? '')
+  // `||` on purpose: a finalizer that has started but not streamed yet keeps showing the translator's text.
+  Array.from({ length: chunkCount }, (_, i) => preview?.finalize[i] || preview?.translate[i] || '')
 
 const emptyProgress = (lang: string, region?: string): TargetProgress => ({
   lang,
