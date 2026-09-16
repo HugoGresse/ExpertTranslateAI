@@ -50,14 +50,13 @@ test('prompt override reaches the translator, back-translation shows deltas, ins
 })
 
 test('encrypting the key locks the workspace until the passphrase is entered', async ({ page }) => {
-  await page.addInitScript(() => {
-    localStorage.setItem('eta.openrouter.key', 'sk-or-e2e-secret')
-  })
   await mockModels(page)
   await page.route('https://openrouter.ai/api/v1/auth/key', (route) =>
     route.fulfill({ json: { data: { label: 't', limit: null, usage: 0 } } }),
   )
   await page.goto('/settings')
+  await page.evaluate(() => localStorage.setItem('eta.openrouter.key', 'sk-or-e2e-secret'))
+  await page.reload()
   await page.locator('input[aria-label="New passphrase"]').fill('correct horse battery')
   await page.getByRole('button', { name: 'Encrypt' }).click()
   await expect(page.getByText('Encrypted at rest')).toBeVisible()
