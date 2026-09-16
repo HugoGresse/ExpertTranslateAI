@@ -23,7 +23,7 @@ export function createFakeLlm(
       calls.push({ request: req })
       await Promise.resolve()
       const text = reply(req)
-      for (const piece of text.split(' ')) yield { type: 'delta', text: piece + ' ' }
+      for (const piece of text.split(' ')) yield { type: 'delta', text: `${piece} ` }
       yield { type: 'usage', usage }
     },
     models: (): Promise<ModelInfo[]> => Promise.resolve([]),

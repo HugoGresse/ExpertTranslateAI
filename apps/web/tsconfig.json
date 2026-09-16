@@ -5,9 +5,8 @@
     "jsx": "react-jsx",
     "jsxImportSource": "react",
     "types": ["astro/client", "node"],
-    "baseUrl": ".",
     "paths": {
-      "@/*": ["src/*"]
+      "@/*": ["./src/*"]
     }
   },
   "include": ["src", "tests", "*.ts", "*.mts", ".astro/types.d.ts"],

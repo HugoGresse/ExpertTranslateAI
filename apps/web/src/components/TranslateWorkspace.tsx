@@ -1,27 +1,26 @@
-import type { JobEstimate, TranslationJob } from '@experttranslate/core'
+import type { JobEstimate, Target, TranslationJob } from '@experttranslate/core'
 import { useStore } from '@nanostores/react'
-import { useEffect, useMemo, useRef, useState, type FC } from 'react'
+import { type FC, useEffect, useMemo, useRef, useState } from 'react'
 import { createBrowserEngine } from '../adapters/engineFactory'
 import { $apiKey } from '../adapters/keyVault'
 import { logger } from '../adapters/logger'
 import { LANGUAGES } from '../data/languages'
 import { useModels } from '../hooks/useModels'
 import { $run, applyProgress, idleRun } from '../stores/run'
-import { $settings, $sourceDraft, $targets, numberSetting } from '../stores/settings'
+import { $settings, $sourceDraft, $targets, numberSetting, type Settings } from '../stores/settings'
 import { KeyGate } from './KeyGate'
 import { ModelPicker } from './ModelPicker'
 import { ResultPanel } from './ResultPanel'
 import { TargetPicker } from './TargetPicker'
 import { Button, Card, Field, formatUsd, inputClass } from './ui'
 
-const buildJob = (source: string): TranslationJob => {
-  const s = $settings.get()
+const buildJob = (source: string, s: Settings, targets: Target[]): TranslationJob => {
   return {
     id: crypto.randomUUID(),
     createdAt: Date.now(),
     sourceText: source,
     sourceLang: s.sourceLang,
-    targets: $targets.get(),
+    targets,
     domain: 'auto',
     difficulty: 'simple',
     models: { translatorA: s.translatorModel },
@@ -58,14 +57,14 @@ export const TranslateWorkspace: FC = () => {
       return
     }
     const handle = setTimeout(() => {
-      setEstimate(engineFactory().engine.estimate(buildJob(source), models))
+      setEstimate(engineFactory().engine.estimate(buildJob(source, settings, targets), models))
     }, 300)
     return () => clearTimeout(handle)
-  }, [engineFactory, source, targets, models, settings.translatorModel, settings.maxTokensPerChunk])
+  }, [engineFactory, source, targets, models, settings])
 
   const start = async (): Promise<void> => {
     if (!engineFactory) return
-    const job = buildJob(source)
+    const job = buildJob(source, settings, targets)
     controller.current = new AbortController()
     logger.info('run.start', {
       jobId: job.id,

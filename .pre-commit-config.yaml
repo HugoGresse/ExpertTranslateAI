@@ -10,29 +10,18 @@ repos:
       - id: check-merge-conflict
   - repo: local
     hooks:
-      - id: prettier
-        name: prettier
-        entry: npx prettier --check
+      - id: biome
+        name: biome check
+        entry: npx biome check --error-on-warnings
         language: system
         types_or:
           - ts
           - tsx
           - javascript
           - json
-          - yaml
-          - markdown
           - css
           - astro
         exclude: ^package-lock\.json$
-      - id: eslint
-        name: eslint
-        entry: npx eslint --max-warnings=0
-        language: system
-        types_or:
-          - ts
-          - tsx
-          - astro
-        pass_filenames: true
       - id: typecheck
         name: typecheck
         entry: npm run typecheck

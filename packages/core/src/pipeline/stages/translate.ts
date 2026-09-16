@@ -1,4 +1,4 @@
-import type { EventSink, LlmPort, LoggerPort, ClockPort } from '../../ports.ts'
+import type { ClockPort, EventSink, LlmPort, LoggerPort } from '../../ports.ts'
 import { buildTranslatePrompt, type TranslatePromptInput } from '../../prompts/translate.ts'
 import type { Candidate, Chunk, TraceEvent, TranslatorRole, Usage } from '../../types.ts'
 

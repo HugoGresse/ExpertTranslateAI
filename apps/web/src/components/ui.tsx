@@ -28,6 +28,7 @@ export interface FieldProps {
 }
 
 export const Field: FC<FieldProps> = ({ label, hint, children }) => (
+  // biome-ignore lint/a11y/noLabelWithoutControl: the control is passed as children and wrapped by the label
   <label className="flex flex-col gap-1 text-sm">
     <span className="font-medium text-neutral-700">{label}</span>
     {children}

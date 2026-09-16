@@ -1,5 +1,5 @@
 import type { ModelInfo } from '@experttranslate/core'
-import { useMemo, useState, type FC } from 'react'
+import { type FC, useMemo, useState } from 'react'
 import { inputClass } from './ui'
 
 export interface ModelPickerProps {

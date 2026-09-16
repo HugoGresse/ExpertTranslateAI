@@ -6,8 +6,8 @@ import {
   defaultRetryOptions,
   LlmHttpError,
   parseRetryAfter,
-  withRetry,
   type RetryOptions,
+  withRetry,
 } from './retry.ts'
 import { readSseData } from './sse.ts'
 

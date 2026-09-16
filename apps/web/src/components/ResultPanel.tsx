@@ -1,6 +1,6 @@
 import type { TargetResult, TraceEvent } from '@experttranslate/core'
-import { useEffect, useState, type FC } from 'react'
-import { RTL_LANGS, languageName } from '../data/languages'
+import { type FC, useEffect, useState } from 'react'
+import { languageName, RTL_LANGS } from '../data/languages'
 import type { TargetProgress } from '../stores/run'
 import { Button, formatUsd } from './ui'
 
@@ -27,8 +27,11 @@ const TraceDrawer: FC<{ trace: TraceEvent[] }> = ({ trace }) => {
       </Button>
       {open ? (
         <ol className="mt-2 flex flex-col gap-2">
-          {trace.map((t, i) => (
-            <li key={i} className="rounded-md border border-neutral-200 bg-neutral-50 p-2 text-xs">
+          {trace.map((t) => (
+            <li
+              key={`${t.stage}-${t.role}-${t.chunkIndex}`}
+              className="rounded-md border border-neutral-200 bg-neutral-50 p-2 text-xs"
+            >
               <div className="flex flex-wrap gap-3 font-mono">
                 <span>{t.stage}</span>
                 <span>{t.model}</span>

@@ -1,11 +1,10 @@
 import { emptyCost, findPricing, sumCosts, usageCost } from './llm/pricing.ts'
 import { createEventQueue } from './pipeline/eventQueue.ts'
-import { translateChunk, type StageContext } from './pipeline/stages/translate.ts'
+import { type StageContext, translateChunk } from './pipeline/stages/translate.ts'
 import type { EnginePorts } from './ports.ts'
 import { chunkText } from './text/chunk.ts'
-import { countTokens } from './text/tokens.ts'
 import { placeholderParity, protectPlaceholders, restorePlaceholders } from './text/placeholders.ts'
-import { AUTO_LANG } from './types.ts'
+import { countTokens } from './text/tokens.ts'
 import type {
   Candidate,
   CostSummary,
@@ -17,6 +16,7 @@ import type {
   TraceEvent,
   TranslationJob,
 } from './types.ts'
+import { AUTO_LANG } from './types.ts'
 
 export interface Engine {
   run(job: TranslationJob, opts?: { signal?: AbortSignal }): AsyncIterable<ProgressEvent>

@@ -1,6 +1,6 @@
 import type { KeyInfo } from '@experttranslate/core'
 import { useStore } from '@nanostores/react'
-import { useState, type FC } from 'react'
+import { type FC, useState } from 'react'
 import { startOAuth } from '../adapters/auth'
 import { createBrowserLlm } from '../adapters/engineFactory'
 import { $apiKey, forgetApiKey, maskKey, saveApiKey } from '../adapters/keyVault'
@@ -8,7 +8,7 @@ import { logger } from '../adapters/logger'
 import { useModels } from '../hooks/useModels'
 import { $settings } from '../stores/settings'
 import { ModelPicker } from './ModelPicker'
-import { Button, Card, Field, basePath, formatUsd, inputClass } from './ui'
+import { Button, basePath, Card, Field, formatUsd, inputClass } from './ui'
 
 const KeySection: FC = () => {
   const apiKey = useStore($apiKey)

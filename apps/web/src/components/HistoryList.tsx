@@ -1,5 +1,5 @@
 import type { TargetResult, TranslationJob } from '@experttranslate/core'
-import { useEffect, useState, type FC } from 'react'
+import { type FC, useCallback, useEffect, useState } from 'react'
 import { storage } from '../adapters/dexieStorage'
 import { logger } from '../adapters/logger'
 import { languageLabel } from '../data/languages'
@@ -56,11 +56,11 @@ const JobRow: FC<{ job: TranslationJob; onDelete: (id: string) => void }> = ({ j
 export const HistoryList: FC = () => {
   const [jobs, setJobs] = useState<TranslationJob[]>([])
 
-  const reload = async (): Promise<void> => setJobs(await storage.jobs.list())
+  const reload = useCallback(async (): Promise<void> => setJobs(await storage.jobs.list()), [])
 
   useEffect(() => {
     void reload()
-  }, [])
+  }, [reload])
 
   const remove = async (id: string): Promise<void> => {
     await storage.results.deleteByJob(id)

@@ -16,19 +16,13 @@
     "preview": "npm run preview -w apps/web",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
-    "lint": "eslint .",
-    "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "lint": "biome check .",
+    "format": "biome format --write .",
+    "lint:fix": "biome check --write ."
   },
   "devDependencies": {
-    "@eslint/js": "^10.0.1",
+    "@biomejs/biome": "^2.5.14",
     "@types/node": "^22.20.3",
-    "eslint": "^10.10.0",
-    "eslint-plugin-astro": "^3.2.0",
-    "globals": "^17.12.0",
-    "prettier": "^3.9.7",
-    "prettier-plugin-astro": "^1.0.0",
-    "typescript": "^6.0.3",
-    "typescript-eslint": "^8.70.0"
+    "typescript": "^7.0.2"
   }
 }

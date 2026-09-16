@@ -43,8 +43,9 @@ Non-goals (v1):
 | Tokens     | `gpt-tokenizer` (client-side estimate, for chunking + cost preview)     | `^4.0.0`                                                                         |
 | Diff       | `diff` (word-level diff for disagreement + review views)                | `^9.0.0`                                                                         |
 | SSE        | `eventsource-parser` for OpenRouter streaming                           | `^4.1.1`                                                                         |
+| Lint/format | Biome (single tool, replaces ESLint + Prettier) | `@biomejs/biome ^2.5.14` |
 | Tests      | vitest (unit), Playwright (e2e, mocked OpenRouter)                      | `vitest ^5.0.1`, `@playwright/test ^1.63.0`                                      |
-| Lang       | TypeScript strict, `@astrojs/check`                                     | `typescript ^6.0.3`                                                              |
+| Lang | TypeScript 7 strict (native compiler); `tsc --noEmit` per package, `astro check` unsupported on TS7 | `typescript ^7.0.2` |
 
 Rationale: Astro gives static pages, zero JS on docs/settings routes, React islands only where the app is interactive. No OpenAI SDK: raw `fetch` keeps bundle small and avoids the `dangerouslyAllowBrowser` flag.
 
@@ -541,7 +542,7 @@ The OpenRouter HTTP client itself lives in core (`llm/openRouterLlm.ts`) because
 ## 11. Delivery phases
 
 **Phase 0 — Scaffold (½ day)**
-npm workspaces (`packages/core`, `apps/web`), Astro + React + Tailwind 4 + TS strict, vitest in both packages, Playwright, ESLint/Prettier, GitHub Pages deploy workflow, `/about` page. Core `ports.ts` and `createEngine` skeleton with a fake `LlmPort` test.
+npm workspaces (`packages/core`, `apps/web`), Astro + React + Tailwind 4 + TS 7 strict, vitest in both packages, Playwright, Biome, GitHub Pages deploy workflow, `/about` page. Core `ports.ts` and `createEngine` skeleton with a fake `LlmPort` test.
 
 **Phase 1 — OpenRouter + single-model translate (1–2 days)**
 Key paste + validation, PKCE flow, model catalog, isomorphic OpenRouter client in core, streaming, cost accounting, chunking with full-doc context, placeholder protection, one translator, multi-target fan-out, basic workspace UI, Dexie `StoragePort`, history. This is already a usable app.
@@ -581,7 +582,7 @@ RTL, drag-and-drop files, Markdown preservation tests, PWA offline shell (app lo
 - **Context URL blocked by CORS in the browser**: detect and offer upload/paste; solved fully by the future server adapter. Never proxy through a third-party CORS service (leaks user content).
 - **Huge context sources (whole docs sites via `llms.txt` links)**: page cap + token cap per source, condensed digest cached by hash, cost of the condense call shown before fetching linked pages.
 - **Contradictory guidelines / glossary**: deterministic precedence rule (section 6.3) + pre-run conflict report.
-- **Core accidentally depending on browser APIs**: ESLint `no-restricted-globals` in `packages/core` for `window`, `document`, `localStorage`, `indexedDB`; core tests run under Node so any DOM use fails CI.
+- **Core accidentally depending on browser APIs**: Biome `noRestrictedGlobals` override for `packages/core` for `window`, `document`, `localStorage`, `indexedDB`; core tests run under Node so any DOM use fails CI.
 
 ---
 

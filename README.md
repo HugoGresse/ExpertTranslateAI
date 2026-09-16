@@ -19,7 +19,11 @@ npm install
 npm run dev
 ```
 
-Other scripts: `npm test`, `npm run lint`, `npm run typecheck`, `npm run build`, `npm run test:e2e -w apps/web`.
+Other scripts: `npm test`, `npm run lint` (Biome), `npm run lint:fix`, `npm run typecheck`, `npm run build`,
+`npm run test:e2e -w apps/web`.
+
+TypeScript 7 (native compiler) is used everywhere; `astro check` does not support it yet, so the web app is
+type-checked with `tsc` after `astro sync` and `.astro` files are validated by the build.
 
 Requires Node 22.12 or newer.
 

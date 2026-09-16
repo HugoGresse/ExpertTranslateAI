@@ -1,4 +1,4 @@
-import { useEffect, useState, type FC } from 'react'
+import { type FC, useEffect, useState } from 'react'
 import { exchangeCode } from '../adapters/auth'
 import { saveApiKey } from '../adapters/keyVault'
 import { logger } from '../adapters/logger'

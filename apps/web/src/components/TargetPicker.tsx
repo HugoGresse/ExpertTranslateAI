@@ -1,5 +1,5 @@
 import type { Target } from '@experttranslate/core'
-import { useState, type FC } from 'react'
+import { type FC, useState } from 'react'
 import { LANGUAGES, languageLabel } from '../data/languages'
 import { Button, inputClass } from './ui'
 
