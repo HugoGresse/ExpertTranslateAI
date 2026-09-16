@@ -2,11 +2,12 @@
 import { createOpenRouterLlm } from '@experttranslate/core'
 import { createJsonStorage, createStderrLogger } from '@experttranslate/node'
 import { configFromEnv, type ServerConfig } from '../src/config.ts'
-import { createEtaServer, SERVER_VERSION } from '../src/server.ts'
+import { createEtaServer } from '../src/server.ts'
+import { SERVER_VERSION } from '../src/version.ts'
 
 function boot(config: ServerConfig): void {
   const logger = createStderrLogger(config.logLevel)
-  const server = createEtaServer({
+  const eta = createEtaServer({
     config,
     llm: createOpenRouterLlm({
       apiKey: config.apiKey,
@@ -18,7 +19,7 @@ function boot(config: ServerConfig): void {
     logger,
     now: () => Date.now(),
   })
-  server.listen(config.port, config.host, () => {
+  eta.server.listen(config.port, config.host, () => {
     logger.info('server.listening', {
       host: config.host,
       port: config.port,
@@ -26,12 +27,24 @@ function boot(config: ServerConfig): void {
       auth: Boolean(config.token),
       origins: config.allowedOrigins,
       dataDir: config.dataDir,
+      persistJobs: config.persistJobs,
+      maxJobs: config.maxJobs,
+      maxBudgetUsd: config.maxBudgetUsd,
+      maxSourceChars: config.maxSourceChars,
+      allowedModels: config.allowedModels,
     })
   })
   const shutdown = (signal: string): void => {
-    logger.info('server.shutdown', { signal })
-    server.close(() => process.exit(0))
-    setTimeout(() => process.exit(0), 5_000).unref()
+    logger.info('server.shutdown', { signal, jobsRunning: eta.jobsRunning() })
+    const forced = setTimeout(() => {
+      logger.warn('server.forcedExit', {})
+      process.exit(1)
+    }, 10_000)
+    forced.unref()
+    void eta.shutdown().then(() => {
+      clearTimeout(forced)
+      process.exitCode = 0
+    })
   }
   process.once('SIGINT', () => shutdown('SIGINT'))
   process.once('SIGTERM', () => shutdown('SIGTERM'))

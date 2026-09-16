@@ -1,16 +1,17 @@
 import { ensureDigests } from './context/prepare.ts'
-import { addUsage, emptyCost, findPricing, usageCost } from './llm/pricing.ts'
+import { addUsage, emptyCost } from './llm/pricing.ts'
 import { createBudgetTracker } from './pipeline/budget.ts'
 import type { StageContext } from './pipeline/call.ts'
+import { estimateJob, isRelevantSource, needsBrief } from './pipeline/estimate.ts'
 import { buildEvalRecord } from './pipeline/evalRecord.ts'
 import { createEventQueue } from './pipeline/eventQueue.ts'
-import { type Plan, planFor, stageCallsPerChunk } from './pipeline/plan.ts'
+import { type Plan, planFor } from './pipeline/plan.ts'
 import { routeModels } from './pipeline/router.ts'
 import { type JobMaterials, runTarget } from './pipeline/runTarget.ts'
 import { runBrief } from './pipeline/stages/brief.ts'
 import { targetKey } from './pipeline/targetKey.ts'
-import type { EnginePorts, Repo } from './ports.ts'
-import { chunkText } from './text/chunk.ts'
+import type { EnginePorts } from './ports.ts'
+import { loadByIds } from './storage/loadByIds.ts'
 import { countTokens } from './text/tokens.ts'
 import { sliceSafe } from './text/unicode.ts'
 import type {
@@ -37,12 +38,6 @@ const errorMessage = (error: unknown): string =>
 const isAbort = (error: unknown): boolean =>
   error instanceof DOMException && error.name === 'AbortError'
 
-async function loadByIds<T extends { id: string }>(repo: Repo<T>, ids: string[]): Promise<T[]> {
-  const out: T[] = []
-  for (const item of await Promise.all(ids.map((id) => repo.get(id)))) if (item) out.push(item)
-  return out
-}
-
 const BRIEF_MAX_TOKENS = 6000
 
 function briefSource(text: string): string {
@@ -51,11 +46,6 @@ function briefSource(text: string): string {
   const tail = sliceSafe(text, text.length - Math.floor(text.length * 0.15))
   return `${head}\n[...]\n${tail}`
 }
-
-const needsBrief = (job: TranslationJob): boolean => job.difficulty !== 'simple'
-
-const isRelevantSource = (source: ContextSource, job: TranslationJob): boolean =>
-  source.enabled && (!source.lang || job.targets.some((t) => t.lang === source.lang))
 
 function resolvePlan(job: TranslationJob, brief: Brief | null): Plan {
   const difficulty: Difficulty =
@@ -234,36 +224,6 @@ export function createEngine(ports: EnginePorts): Engine {
       return events
     },
 
-    estimate(job, models, sources = []) {
-      const sourceTokens = countTokens(job.sourceText)
-      const chunkCount = chunkText(job.sourceText, job.options.maxTokensPerChunk).length
-      const difficulty: Difficulty = job.difficulty === 'auto' ? 'normal' : job.difficulty
-      const plan = planFor(difficulty)
-      const perChunk = stageCallsPerChunk(plan)
-      const callCount =
-        chunkCount * perChunk * job.targets.length +
-        (needsBrief(job) ? 1 : 0) +
-        (plan.score ? job.targets.length : 0) +
-        (plan.backTranslate || job.options.backTranslate ? 2 * job.targets.length : 0)
-      const contextTokens = sources
-        .filter((s) => isRelevantSource(s, job) && job.options.contextSourceIds.includes(s.id))
-        .reduce(
-          (acc, s) => acc + Math.min(countTokens(s.rawText), job.options.contextTokenBudget),
-          0,
-        )
-      const pricing = findPricing(models, job.models.translatorA)
-      const promptPerCall = sourceTokens + contextTokens + 400
-      const outputPerCall = sourceTokens * 1.2
-      const estimatedUsd = pricing
-        ? usageCost(
-            {
-              promptTokens: promptPerCall * callCount,
-              completionTokens: outputPerCall * callCount,
-            },
-            pricing,
-          )
-        : null
-      return { sourceTokens, contextTokens, chunkCount, callCount, estimatedUsd, difficulty }
-    },
+    estimate: estimateJob,
   }
 }

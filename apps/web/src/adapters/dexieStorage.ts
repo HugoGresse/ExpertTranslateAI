@@ -19,7 +19,8 @@ import Dexie, { type EntityTable } from 'dexie'
 import { logger } from './logger'
 
 export interface ModelCache {
-  id: 'catalog'
+  /** `catalog` for the user's own OpenRouter key, `catalog:<server origin>` per server. */
+  id: string
   fetchedAt: number
   models: ModelInfo[]
 }
@@ -140,7 +141,9 @@ const EXPORTABLE_SETTING_PREFIXES = [
 const isExportableSetting = (key: string): boolean =>
   EXPORTABLE_SETTING_PREFIXES.some((p) => key.startsWith(p)) &&
   !key.includes('openrouter') &&
-  !key.endsWith('serverToken')
+  // The server connection is device configuration: never shipped in a bundle, never imported from one.
+  !key.endsWith('serverToken') &&
+  !key.endsWith('serverUrl')
 
 export async function exportAll(database: EtaDatabase = db): Promise<ExportBundle> {
   const tables: Record<string, unknown[]> = {}

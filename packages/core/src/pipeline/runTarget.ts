@@ -152,6 +152,7 @@ export async function runTarget(
     finalText: evaluation.finalText,
     brief: materials.brief,
     plan: { difficulty: escalated.plan.difficulty, translators: escalated.plan.translators },
+    models,
     reviews: outcomes.flatMap((o) => (o.review ? [o.review] : [])),
     judgments: outcomes.flatMap((o) => (o.judgment ? [o.judgment] : [])),
     score: evaluation.score,

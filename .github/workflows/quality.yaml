@@ -32,6 +32,14 @@ jobs:
         run: pre-commit run --all-files --show-diff-on-failure
       - name: run unit tests
         run: npm test
+      - name: run the CLI through Node's type stripping
+        run: node apps/cli/bin/eta.ts --help > /dev/null
+      - name: boot the server through Node's type stripping
+        run: |
+          OPENROUTER_API_KEY=x ETA_SERVER_TOKEN=t PORT=8799 node apps/server/bin/eta-server.ts &
+          sleep 3
+          curl --fail --silent http://127.0.0.1:8799/api/health
+          kill %1
       - name: install Playwright browsers
         run: npx playwright install --with-deps chromium
       - name: run end-to-end tests

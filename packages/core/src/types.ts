@@ -376,6 +376,8 @@ export interface TargetResult {
   finalText: string
   brief: Brief | null
   plan: { difficulty: Difficulty; translators: TranslatorRole[] }
+  /** Role models actually used after routing; what evals should be attributed to. */
+  models: RoleModels
   reviews: Review[]
   judgments: Judgment[]
   score: QualityScore | null

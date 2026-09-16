@@ -53,11 +53,17 @@ without putting it in every browser:
 OPENROUTER_API_KEY=sk-or-... ETA_SERVER_TOKEN=change-me ETA_ALLOWED_ORIGINS=https://you.github.io npx eta-server
 ```
 
-The server refuses to start without `ETA_SERVER_TOKEN` unless `ETA_ALLOW_ANONYMOUS=true` is set, listens on
-`127.0.0.1:8787` by default (`ETA_HOST`, `PORT`), and keeps results in `ETA_DATA_DIR`. In the web app, Settings →
-Server takes the URL and token; from then on jobs are posted to `/api/jobs` with the materials they reference
-and progress streams back over SSE, while results still land in the browser's history. The token is never
-included in exports. Put the server behind HTTPS before exposing it beyond localhost.
+The server refuses to start without `ETA_SERVER_TOKEN` unless `ETA_ALLOW_ANONYMOUS=true` is set and listens on
+`127.0.0.1:8787` by default (`ETA_HOST`, `PORT`). It enforces its own envelope on every job regardless of what
+the client asks for: `ETA_MAX_BUDGET_USD` (default 5, `none` to disable), `ETA_MAX_SOURCE_CHARS` (200000),
+`ETA_MAX_JOBS` running at once (4, extra requests get 429) and an optional `ETA_ALLOWED_MODELS` list. Jobs run
+against an in-memory store and nothing a client sends is written to disk; set `ETA_PERSIST_JOBS=true` to keep
+results in `ETA_DATA_DIR`. Condensed digests of client contexts are cached in memory by content hash so repeat
+jobs never pay the condense call twice. In the web app, Settings → Server takes the URL and token; from then on
+jobs are posted to `/api/jobs` with only the materials they reference (active glossary scopes, target-language
+entries and memory) and progress streams back over SSE, while results still land in the browser's history. The
+server URL and token are device configuration and are never exported or imported. Put the server behind HTTPS
+before exposing it beyond localhost.
 
 ## Offline shell
 

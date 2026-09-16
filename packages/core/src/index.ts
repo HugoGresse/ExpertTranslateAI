@@ -45,6 +45,7 @@ export { LlmHttpError, LlmStreamError } from './llm/retry.ts'
 export { readSseData, StreamIdleTimeoutError } from './llm/sse.ts'
 export { LOG_LEVELS, type LogLevel, levelEnabled, parseLogLevel } from './logging.ts'
 export { DIFFICULTY_ORDER, decideEscalation, nextDifficulty } from './pipeline/escalation.ts'
+export { estimateJob } from './pipeline/estimate.ts'
 export { buildEvalRecord, promptOverrideHash, wordCount } from './pipeline/evalRecord.ts'
 export { PLANS, type Plan, planFor } from './pipeline/plan.ts'
 export { routeModels } from './pipeline/router.ts'
@@ -79,14 +80,24 @@ export {
   type Prompt,
   type TranslatePromptInput,
 } from './prompts/translate.ts'
-export { createRemoteEngine, type RemoteEngine, type RemoteEngineOptions } from './remote/client.ts'
+export {
+  createRemoteEngine,
+  type RemoteEngine,
+  type RemoteEngineOptions,
+  RemoteHttpError,
+  type ServerHealth,
+} from './remote/client.ts'
 export {
   collectMaterials,
   isRemoteJobRequest,
+  parseRemoteJobRequest,
   REMOTE_MATERIAL_TABLES,
+  type RemoteErrorEvent,
   type RemoteJobRequest,
   type RemoteMaterials,
+  type RemoteRequestParse,
 } from './remote/protocol.ts'
+export { remoteJobRequestSchema, translationJobSchema } from './schemas/job.ts'
 export {
   alignSentences,
   DISAGREEMENT_SIMILARITY,
@@ -102,6 +113,8 @@ export {
   STORAGE_TABLES,
   type StorageTable,
 } from './storage/bundle.ts'
+export { loadByIds } from './storage/loadByIds.ts'
+export { createMemoryStorage, memoryRepo } from './storage/memory.ts'
 export { calculateChunkSize, chunkText } from './text/chunk.ts'
 export { wordEditDistance } from './text/editDistance.ts'
 export { placeholderParity, protectPlaceholders, restorePlaceholders } from './text/placeholders.ts'

@@ -162,10 +162,15 @@ export const TranslateWorkspace: FC = () => {
   )
 
   const remote = usesServer(settings)
+  const { serverUrl, serverToken, concurrency } = settings
   const engineFactory = useMemo(() => {
-    const handle = createEngineHandle(settings, apiKey, numberSetting(settings.concurrency, 4))
+    const handle = createEngineHandle(
+      { serverUrl, serverToken },
+      apiKey,
+      numberSetting(concurrency, 4),
+    )
     return handle ? () => handle : null
-  }, [apiKey, settings])
+  }, [apiKey, serverUrl, serverToken, concurrency])
 
   useEffect(() => {
     if (!engineFactory || source.trim().length === 0 || targets.length === 0) {

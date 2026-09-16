@@ -1,23 +1,36 @@
+import { expandScopeIds } from '../glossary/resolve.ts'
 import type { StoragePort } from '../ports.ts'
-import type { TranslationJob } from '../types.ts'
-
-type Rows<K extends keyof StoragePort> = StoragePort[K] extends { list(): Promise<infer T> }
-  ? T
-  : never
+import { remoteJobRequestSchema } from '../schemas/job.ts'
+import { loadByIds } from '../storage/loadByIds.ts'
+import type {
+  ContextSource,
+  GlossaryEntry,
+  GlossaryScope,
+  GuidelineSet,
+  TmEntry,
+  TranslationJob,
+} from '../types.ts'
+import { AUTO_LANG } from '../types.ts'
 
 /** Materials a client ships with a job so the server needs no copy of the client's library. */
 export interface RemoteMaterials {
-  contexts: Rows<'contexts'>
-  guidelines: Rows<'guidelines'>
-  glossaryScopes: Rows<'glossaryScopes'>
-  glossaryEntries: Rows<'glossaryEntries'>
-  tm: Rows<'tm'>
+  contexts: ContextSource[]
+  guidelines: GuidelineSet[]
+  glossaryScopes: GlossaryScope[]
+  glossaryEntries: GlossaryEntry[]
+  tm: TmEntry[]
 }
 
 /** Body of `POST /api/jobs`; the response is an SSE stream of ProgressEvent JSON, ended by `[DONE]`. */
 export interface RemoteJobRequest {
   job: TranslationJob
   materials: RemoteMaterials
+}
+
+/** Wire-level frame the server sends when the run dies before `job-done`. */
+export interface RemoteErrorEvent {
+  type: 'error'
+  message: string
 }
 
 export const REMOTE_MATERIAL_TABLES = [
@@ -28,32 +41,51 @@ export const REMOTE_MATERIAL_TABLES = [
   'tm',
 ] as const satisfies ReadonlyArray<keyof RemoteMaterials>
 
-const isRecord = (x: unknown): x is Record<string, unknown> => typeof x === 'object' && x !== null
+export type RemoteRequestParse =
+  | { ok: true; value: RemoteJobRequest }
+  | { ok: false; issues: string[] }
 
-/** Shape check only; row contents are trusted like any other client-supplied job. */
-export function isRemoteJobRequest(x: unknown): x is RemoteJobRequest {
-  if (!isRecord(x) || !isRecord(x.job) || !isRecord(x.materials)) return false
-  const { job, materials } = x
-  if (typeof job.id !== 'string' || typeof job.sourceText !== 'string') return false
-  if (!Array.isArray(job.targets) || !isRecord(job.models) || !isRecord(job.options)) return false
-  return REMOTE_MATERIAL_TABLES.every((t) => Array.isArray(materials[t]))
+/** Validates a request body; rows beyond `id` are trusted like any other client-supplied job data. */
+export function parseRemoteJobRequest(x: unknown): RemoteRequestParse {
+  const result = remoteJobRequestSchema.safeParse(x)
+  if (!result.success)
+    return {
+      ok: false,
+      issues: result.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`),
+    }
+  // zod's passthrough rows are typed as `{ id: string } & Record<string, unknown>`; the schema is the
+  // structural gate, the domain types describe what the rows are.
+  return { ok: true, value: result.data as unknown as RemoteJobRequest }
 }
 
-/** Gathers exactly the materials a job references from a local store. */
+export const isRemoteJobRequest = (x: unknown): x is RemoteJobRequest => parseRemoteJobRequest(x).ok
+
+/** Gathers only what the job can use: referenced ids, active glossary scopes and target-language rows. */
 export async function collectMaterials(
   storage: StoragePort,
   job: TranslationJob,
 ): Promise<RemoteMaterials> {
-  const byIds = async <T extends { id: string }>(
-    list: () => Promise<T[]>,
-    ids: string[],
-  ): Promise<T[]> => (ids.length === 0 ? [] : (await list()).filter((r) => ids.includes(r.id)))
+  const targetLangs = new Set(job.targets.map((t) => t.lang))
   const wantsGlossary = job.options.glossaryScopeIds.length > 0
+  const scopes = wantsGlossary ? await storage.glossaryScopes.list() : []
+  const active = expandScopeIds(scopes, job.options.glossaryScopeIds)
+  const entries = wantsGlossary
+    ? (await storage.glossaryEntries.list()).filter(
+        (e) => active.has(e.scopeId) && (e.kind === 'doNotTranslate' || targetLangs.has(e.lang)),
+      )
+    : []
+  const tm = job.options.useMemory
+    ? (await storage.tm.list()).filter(
+        (e) =>
+          targetLangs.has(e.targetLang) &&
+          (job.sourceLang === AUTO_LANG || e.sourceLang === job.sourceLang),
+      )
+    : []
   return {
-    contexts: await byIds(() => storage.contexts.list(), job.options.contextSourceIds),
-    guidelines: await byIds(() => storage.guidelines.list(), job.options.guidelineSetIds),
-    glossaryScopes: wantsGlossary ? await storage.glossaryScopes.list() : [],
-    glossaryEntries: wantsGlossary ? await storage.glossaryEntries.list() : [],
-    tm: job.options.useMemory ? await storage.tm.list() : [],
+    contexts: await loadByIds(storage.contexts, job.options.contextSourceIds),
+    guidelines: await loadByIds(storage.guidelines, job.options.guidelineSetIds),
+    glossaryScopes: scopes.filter((s) => active.has(s.id)),
+    glossaryEntries: entries,
+    tm,
   }
 }

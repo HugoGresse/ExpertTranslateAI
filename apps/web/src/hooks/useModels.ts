@@ -14,39 +14,45 @@ export interface ModelsState {
   refresh: () => void
 }
 
+/** Typing a server URL or token should not fire a request per keystroke. */
+const SETTLE_MS = 400
+
 export function useModels(): ModelsState {
   const apiKey = useStore($apiKey)
-  const settings = useStore($settings)
-  const { serverUrl, serverToken } = settings
+  const { serverUrl, serverToken } = useStore($settings)
   const [models, setModels] = useState<ModelInfo[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [tick, setTick] = useState(0)
 
   useEffect(() => {
-    const handle = createEngineHandle({ serverUrl, serverToken, concurrency: '2' }, apiKey, 2)
-    if (!handle) {
-      setModels([])
-      return
-    }
     let cancelled = false
-    setLoading(true)
-    loadModels(handle, { force: tick > 0 })
-      .then((list) => {
-        if (!cancelled) {
-          setModels(list)
-          setError(null)
-        }
-      })
-      .catch((e: unknown) => {
-        logger.warn('models.loadFailed', { error: String(e), remote: handle.remote })
-        if (!cancelled) setError(e instanceof Error ? e.message : String(e))
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false)
-      })
+    const handle = setTimeout(() => {
+      const source = createEngineHandle({ serverUrl, serverToken }, apiKey, 2)
+      if (!source) {
+        setModels([])
+        setLoading(false)
+        return
+      }
+      setLoading(true)
+      loadModels(source, { force: tick > 0 })
+        .then((list) => {
+          if (!cancelled) {
+            setModels(list)
+            setError(null)
+          }
+        })
+        .catch((e: unknown) => {
+          logger.warn('models.loadFailed', { error: String(e), catalog: source.catalogId })
+          if (!cancelled) setError(e instanceof Error ? e.message : String(e))
+        })
+        .finally(() => {
+          if (!cancelled) setLoading(false)
+        })
+    }, SETTLE_MS)
     return () => {
       cancelled = true
+      clearTimeout(handle)
     }
   }, [apiKey, serverUrl, serverToken, tick])
 

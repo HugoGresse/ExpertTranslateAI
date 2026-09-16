@@ -152,6 +152,11 @@ const SetEditor: FC<{
           >
             {busy ? 'Extracting…' : 'Extract rules from style guide'}
           </Button>
+          {!apiKey ? (
+            <span className="self-center text-xs text-neutral-500">
+              Extraction calls a model from this browser and needs a local OpenRouter key.
+            </span>
+          ) : null}
         </div>
         <ul className="flex flex-col gap-2">
           {set.rules.map((r) => (

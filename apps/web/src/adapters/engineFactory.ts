@@ -5,6 +5,7 @@ import {
   type Engine,
   type LlmPort,
   type ModelInfo,
+  type ServerHealth,
   systemClock,
 } from '@experttranslate/core'
 import { type Settings, usesServer } from '../stores/settings'
@@ -14,11 +15,10 @@ import { logger } from './logger'
 export interface EngineHandle {
   engine: Engine
   models: () => Promise<ModelInfo[]>
-  /** Present only when the engine runs in this browser with the user's own key. */
-  llm: LlmPort | null
-  remote: boolean
-  /** Server reachability probe; only a remote handle has one. */
-  health: (() => Promise<{ ok: boolean; version?: string }>) | null
+  /** Cache key for the model catalog: one per key, one per server. */
+  catalogId: string
+  /** Present only for a server-backed engine. */
+  health: (() => Promise<ServerHealth>) | null
 }
 
 export function createBrowserLlm(apiKey: string, concurrency: number): LlmPort {
@@ -31,12 +31,12 @@ export function createBrowserLlm(apiKey: string, concurrency: number): LlmPort {
   })
 }
 
-const noLlm: LlmPort = {
-  chat: () => {
-    throw new Error('The engine runs on the server; no local model calls')
-  },
-  models: () => Promise.resolve([]),
-  keyInfo: () => Promise.reject(new Error('No local key')),
+/** Accepts what the user typed and rejects anything that is not an absolute http(s) URL. */
+export function serverOrigin(serverUrl: string): string | null {
+  const trimmed = serverUrl.trim()
+  if (!trimmed || !URL.canParse(trimmed)) return null
+  const url = new URL(trimmed)
+  return url.protocol === 'https:' || url.protocol === 'http:' ? url.origin : null
 }
 
 export function createRemoteHandle(serverUrl: string, token: string): EngineHandle {
@@ -46,14 +46,12 @@ export function createRemoteHandle(serverUrl: string, token: string): EngineHand
     storage,
     clock: systemClock,
     logger,
-    local: createEngine({ llm: noLlm, storage, clock: systemClock, logger }),
     idleTimeoutMs: 120_000,
   })
   return {
     engine,
     models: () => engine.models(),
-    llm: null,
-    remote: true,
+    catalogId: `catalog:${serverOrigin(serverUrl) ?? serverUrl.trim()}`,
     health: () => engine.health(),
   }
 }
@@ -63,18 +61,20 @@ export function createBrowserHandle(apiKey: string, concurrency: number): Engine
   return {
     engine: createEngine({ llm, storage, clock: systemClock, logger }),
     models: () => llm.models(),
-    llm,
-    remote: false,
+    catalogId: 'catalog',
     health: null,
   }
 }
 
-/** Picks the server when one is configured, otherwise the in-browser engine (needs a key). */
+/** The server when a valid URL is configured, otherwise the in-browser engine (needs a key). */
 export function createEngineHandle(
-  settings: Pick<Settings, 'serverUrl' | 'serverToken' | 'concurrency'>,
+  settings: Pick<Settings, 'serverUrl' | 'serverToken'>,
   apiKey: string | null,
   concurrency: number,
 ): EngineHandle | null {
-  if (usesServer(settings)) return createRemoteHandle(settings.serverUrl, settings.serverToken)
+  if (usesServer(settings))
+    return serverOrigin(settings.serverUrl)
+      ? createRemoteHandle(settings.serverUrl, settings.serverToken)
+      : null
   return apiKey ? createBrowserHandle(apiKey, concurrency) : null
 }
