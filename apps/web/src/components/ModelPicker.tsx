@@ -9,7 +9,8 @@ export interface ModelPickerProps {
   loading?: boolean
 }
 
-const perMillion = (usdPerToken: number): string => `$${(usdPerToken * 1_000_000).toFixed(2)}/M`
+const perMillion = (usdPerToken: number): string =>
+  usdPerToken < 0 ? 'variable' : `$${(usdPerToken * 1_000_000).toFixed(2)}/M`
 
 export const ModelPicker: FC<ModelPickerProps> = ({ models, value, onChange, loading = false }) => {
   const [query, setQuery] = useState('')

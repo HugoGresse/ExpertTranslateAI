@@ -124,7 +124,7 @@ async function runTarget(
     ctx.logger.warn('target.placeholderMismatch', { lang: target.lang, ...parity })
   }
   const finalText = restorePlaceholders(joined, protectedSource.placeholders)
-  const guidelineReport = checkGuidelines(finalText, sets)
+  const guidelineReport = checkGuidelines(finalText, sets, job.sourceText)
   if (guidelineReport.length > 0) {
     ctx.logger.warn('target.guidelineViolations', {
       lang: target.lang,

@@ -10,7 +10,7 @@ interface RawRule {
   examples?: { good?: unknown; bad?: unknown }
 }
 
-const KINDS = new Set<GuidelineKind>(['must', 'must-not', 'prefer'])
+const KINDS = new Set<GuidelineKind>(['must', 'must-not', 'prefer', 'keep'])
 
 export function normalizeRules(raw: unknown, makeId: () => string): GuidelineRule[] {
   if (!Array.isArray(raw)) return []

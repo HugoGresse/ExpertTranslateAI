@@ -10,6 +10,7 @@ const KIND_LABEL: Record<GuidelineRule['kind'], string> = {
   must: 'MUST',
   'must-not': 'MUST NOT',
   prefer: 'PREFER',
+  keep: 'KEEP UNCHANGED',
 }
 
 export function activeGuidelineSets(sets: GuidelineSet[], lang: string): GuidelineSet[] {

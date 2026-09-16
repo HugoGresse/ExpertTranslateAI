@@ -16,7 +16,7 @@ import { useRepo } from '../hooks/useRepo'
 import { $settings } from '../stores/settings'
 import { Button, Card, Field, inputClass } from './ui'
 
-const KINDS: GuidelineKind[] = ['must', 'must-not', 'prefer']
+const KINDS: GuidelineKind[] = ['keep', 'must', 'must-not', 'prefer']
 
 const newRule = (): GuidelineRule => ({ id: crypto.randomUUID(), text: '', kind: 'must' })
 

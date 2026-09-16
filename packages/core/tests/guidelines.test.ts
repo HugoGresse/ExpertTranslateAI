@@ -66,6 +66,24 @@ describe('guidelines', () => {
     ).toEqual([])
   })
 
+  it('checks keep rules against the source text', () => {
+    const keep: GuidelineSet = {
+      id: 'k',
+      name: 'Keep',
+      enabled: true,
+      createdAt: 0,
+      rules: [
+        { id: 'k1', text: 'Keep the product name', kind: 'keep', pattern: '\\bHyperfluid\\b' },
+      ],
+    }
+    expect(
+      checkGuidelines('Bienvenue sur Hyperfluide', [keep], 'Welcome to Hyperfluid'),
+    ).toHaveLength(1)
+    expect(checkGuidelines('Bienvenue sur Hyperfluid', [keep], 'Welcome to Hyperfluid')).toEqual([])
+    expect(checkGuidelines('Bonjour', [keep], 'Hello')).toEqual([])
+    expect(checkGuidelines('Bonjour', [keep])).toEqual([])
+  })
+
   it('reports checkability', () => {
     const rules = sets[0]?.rules ?? []
     expect(rules.map(isCheckable)).toEqual([true, false, true])

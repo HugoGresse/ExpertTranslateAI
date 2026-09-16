@@ -46,7 +46,7 @@ export interface ContextSource {
   createdAt: number
 }
 
-export type GuidelineKind = 'must' | 'must-not' | 'prefer'
+export type GuidelineKind = 'must' | 'must-not' | 'prefer' | 'keep'
 
 export interface GuidelineRule {
   id: string

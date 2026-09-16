@@ -17,9 +17,9 @@ export interface RetryOptions {
 }
 
 export const defaultRetryOptions: RetryOptions = {
-  maxAttempts: 4,
-  baseDelayMs: 500,
-  maxDelayMs: 8000,
+  maxAttempts: 5,
+  baseDelayMs: 1500,
+  maxDelayMs: 30000,
 }
 
 export function isRetryable(error: unknown): boolean {
@@ -32,9 +32,11 @@ export function backoffDelay(
   attempt: number,
   opts: RetryOptions,
   retryAfterMs: number | null,
+  status?: number,
 ): number {
   if (retryAfterMs !== null) return Math.min(retryAfterMs, opts.maxDelayMs)
-  const exp = opts.baseDelayMs * 2 ** attempt
+  const rateLimitFactor = status === 429 ? 2 : 1
+  const exp = opts.baseDelayMs * rateLimitFactor * 2 ** attempt
   const jitter = Math.random() * opts.baseDelayMs
   return Math.min(exp + jitter, opts.maxDelayMs)
 }
@@ -55,7 +57,8 @@ export async function withRetry<T>(
       lastError = error
       if (!isRetryable(error) || attempt === opts.maxAttempts - 1) throw error
       const retryAfter = error instanceof LlmHttpError ? error.retryAfterMs : null
-      await sleep(backoffDelay(attempt, opts, retryAfter))
+      const status = error instanceof LlmHttpError ? error.status : undefined
+      await sleep(backoffDelay(attempt, opts, retryAfter, status))
     }
   }
   throw lastError
