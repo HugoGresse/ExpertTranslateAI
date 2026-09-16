@@ -82,6 +82,24 @@ export const RoleModelsCard: FC = () => {
             onChange={(e) => $settings.setKey('budgetUsd', e.target.value)}
           />
         </Field>
+        <Field
+          label="Reasoning effort"
+          hint="Sent as OpenRouter reasoning.effort. Reasoning models can spend thousands of hidden tokens per call; low keeps runs fast and cheap. Ignored by models without reasoning."
+        >
+          <select
+            className={inputClass}
+            value={settings.reasoningEffort}
+            onChange={(e) =>
+              $settings.setKey('reasoningEffort', e.target.value as Settings['reasoningEffort'])
+            }
+          >
+            <option value="none">Off</option>
+            <option value="minimal">Minimal</option>
+            <option value="low">Low</option>
+            <option value="medium">Medium</option>
+            <option value="high">High</option>
+          </select>
+        </Field>
         {ROLES.map((r) => (
           <Field key={r.key} label={r.label} hint={r.hint}>
             <ModelPicker

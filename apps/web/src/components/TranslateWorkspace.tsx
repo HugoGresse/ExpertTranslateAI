@@ -62,6 +62,7 @@ const buildJob = (
       contextTokenBudget: numberSetting(s.contextTokenBudget, 4000),
       guidelinesTokenBudget: numberSetting(s.guidelinesTokenBudget, 1500),
       budgetUsd: s.budgetUsd.trim() ? numberSetting(s.budgetUsd, 0) || null : null,
+      reasoningEffort: s.reasoningEffort,
       formality: s.formality,
       ...(s.tone ? { tone: s.tone } : {}),
       ...(s.audience ? { audience: s.audience } : {}),

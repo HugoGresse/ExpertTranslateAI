@@ -22,6 +22,7 @@ export interface JobOptions {
   contextTokenBudget: number
   guidelinesTokenBudget: number
   budgetUsd: number | null
+  reasoningEffort: ReasoningEffort
 }
 
 export interface Brief {
@@ -295,11 +296,14 @@ export interface ChatMessage {
   content: string
 }
 
+export type ReasoningEffort = 'none' | 'minimal' | 'low' | 'medium' | 'high'
+
 export interface ChatRequest {
   model: string
   messages: ChatMessage[]
   temperature?: number
   maxTokens?: number
+  reasoningEffort?: ReasoningEffort
   responseFormat?: { type: 'json_object' } | { type: 'json_schema'; jsonSchema: unknown }
 }
 

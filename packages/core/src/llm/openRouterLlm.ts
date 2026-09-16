@@ -10,6 +10,7 @@ import {
   defaultRetryOptions,
   isRetryable,
   LlmHttpError,
+  LlmStreamError,
   parseRetryAfter,
   type RetryOptions,
 } from './retry.ts'
@@ -80,6 +81,8 @@ function buildBody(req: ChatRequest): Record<string, unknown> {
     usage: { include: true },
   }
   if (req.temperature !== undefined) body.temperature = req.temperature
+  if (req.reasoningEffort === 'none') body.reasoning = { enabled: false }
+  else if (req.reasoningEffort) body.reasoning = { effort: req.reasoningEffort }
   if (req.maxTokens !== undefined) body.max_tokens = req.maxTokens
   if (req.responseFormat?.type === 'json_object') body.response_format = { type: 'json_object' }
   if (req.responseFormat?.type === 'json_schema') {
@@ -144,8 +147,7 @@ export function createOpenRouterLlm(options: OpenRouterLlmOptions): LlmPort {
                 logger.warn('openrouter.chat.badChunk', { data: data.slice(0, 120) })
                 continue
               }
-              if (parsed.error)
-                throw new Error(`OpenRouter stream error: ${parsed.error.message ?? 'unknown'}`)
+              if (parsed.error) throw new LlmStreamError(parsed.error.message ?? 'unknown')
               const text = parsed.choices?.[0]?.delta?.content
               if (text) {
                 yielded = true

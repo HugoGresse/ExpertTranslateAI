@@ -1,4 +1,4 @@
-import type { RoleModels, Target } from '@experttranslate/core'
+import type { ReasoningEffort, RoleModels, Target } from '@experttranslate/core'
 import { persistentAtom, persistentMap } from '@nanostores/persistent'
 
 export type Settings = {
@@ -12,6 +12,7 @@ export type Settings = {
   helperModel: string
   difficulty: 'auto' | 'simple' | 'normal' | 'hard'
   budgetUsd: string
+  reasoningEffort: ReasoningEffort
   contextTokenBudget: string
   guidelinesTokenBudget: string
   sourceLang: string
@@ -36,6 +37,7 @@ export const $settings = persistentMap<Settings>('eta.settings.', {
   helperModel: '',
   difficulty: 'auto',
   budgetUsd: '',
+  reasoningEffort: 'low',
   contextTokenBudget: '4000',
   guidelinesTokenBudget: '1500',
   sourceLang: 'auto',

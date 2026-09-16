@@ -11,6 +11,13 @@ export class LlmHttpError extends Error {
   }
 }
 
+export class LlmStreamError extends Error {
+  constructor(readonly providerMessage: string) {
+    super(`OpenRouter stream error: ${providerMessage}`)
+    this.name = 'LlmStreamError'
+  }
+}
+
 export interface RetryOptions {
   maxAttempts: number
   baseDelayMs: number
@@ -28,6 +35,7 @@ export function isRetryable(error: unknown): boolean {
   if (error instanceof LlmHttpError) return error.status === 429 || error.status >= 500
   if (error instanceof DOMException && error.name === 'AbortError') return false
   if (error instanceof StreamIdleTimeoutError) return true
+  if (error instanceof LlmStreamError) return true
   return error instanceof TypeError
 }
 

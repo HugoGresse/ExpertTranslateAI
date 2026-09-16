@@ -146,3 +146,51 @@ describe('idle timeout', () => {
     expect(calls).toBe(1)
   })
 })
+
+describe('reasoning and stream errors', () => {
+  it('maps reasoning effort to the OpenRouter reasoning parameter', async () => {
+    const bodies: Array<Record<string, unknown>> = []
+    const fetchImpl: typeof fetch = (_url, init) => {
+      bodies.push(JSON.parse(init?.body as string) as Record<string, unknown>)
+      return Promise.resolve(new Response(sse(['[DONE]']), { status: 200 }))
+    }
+    const llm = createOpenRouterLlm({ apiKey: 'k', fetch: fetchImpl })
+    for await (const _ of llm.chat({ model: 'm', messages: [], reasoningEffort: 'low' })) {
+      /* drain */
+    }
+    for await (const _ of llm.chat({ model: 'm', messages: [], reasoningEffort: 'none' })) {
+      /* drain */
+    }
+    for await (const _ of llm.chat({ model: 'm', messages: [] })) {
+      /* drain */
+    }
+    expect(bodies[0]?.reasoning).toEqual({ effort: 'low' })
+    expect(bodies[1]?.reasoning).toEqual({ enabled: false })
+    expect(bodies[2]?.reasoning).toBeUndefined()
+  })
+
+  it('retries a provider stream error that happens before any token', async () => {
+    let calls = 0
+    const fetchImpl: typeof fetch = () => {
+      calls++
+      const lines =
+        calls === 1
+          ? [
+              JSON.stringify({
+                error: { message: 'The model stopped before completing the response.' },
+              }),
+            ]
+          : [JSON.stringify({ choices: [{ delta: { content: 'ok' } }] }), '[DONE]']
+      return Promise.resolve(new Response(sse(lines), { status: 200 }))
+    }
+    const llm = createOpenRouterLlm({
+      apiKey: 'k',
+      fetch: fetchImpl,
+      retry: { maxAttempts: 3, baseDelayMs: 1, maxDelayMs: 2 },
+    })
+    const out = []
+    for await (const c of llm.chat({ model: 'm', messages: [] })) out.push(c)
+    expect(calls).toBe(2)
+    expect(out[0]).toEqual({ type: 'delta', text: 'ok' })
+  })
+})

@@ -100,6 +100,7 @@ export const sampleJob = (overrides: Partial<TranslationJob> = {}): TranslationJ
     contextTokenBudget: 4000,
     guidelinesTokenBudget: 1500,
     budgetUsd: null,
+    reasoningEffort: 'low',
   },
   status: 'queued',
   ...overrides,

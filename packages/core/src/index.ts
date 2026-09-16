@@ -20,7 +20,8 @@ export {
   toModelInfo,
 } from './llm/openRouterLlm.ts'
 export { emptyCost, findPricing, sumCosts, usageCost } from './llm/pricing.ts'
-export { LlmHttpError } from './llm/retry.ts'
+export { LlmHttpError, LlmStreamError } from './llm/retry.ts'
+export { StreamIdleTimeoutError } from './llm/sse.ts'
 export { PLANS, type Plan, planFor } from './pipeline/plan.ts'
 export type {
   ClockPort,

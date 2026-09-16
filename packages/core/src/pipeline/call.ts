@@ -2,7 +2,7 @@ import type { ZodType } from 'zod'
 import { collectText, extractJson } from '../llm/collect.ts'
 import type { ClockPort, EventSink, LlmPort, LoggerPort } from '../ports.ts'
 import type { Prompt } from '../prompts/translate.ts'
-import type { ChatMessage, StageName, TraceEvent, Usage } from '../types.ts'
+import type { ChatMessage, ReasoningEffort, StageName, TraceEvent, Usage } from '../types.ts'
 import type { BudgetTracker } from './budget.ts'
 
 export interface StageContext {
@@ -12,6 +12,7 @@ export interface StageContext {
   events: EventSink
   budget: BudgetTracker
   trace: TraceEvent[]
+  reasoningEffort?: ReasoningEffort
   signal?: AbortSignal
 }
 
@@ -57,6 +58,7 @@ export async function callRole(input: CallInput, ctx: StageContext): Promise<Cal
     model: input.model,
     messages: messages(input.prompt),
     temperature: input.temperature ?? 0.2,
+    ...(ctx.reasoningEffort ? { reasoningEffort: ctx.reasoningEffort } : {}),
   }
 
   let text = ''

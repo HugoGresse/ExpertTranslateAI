@@ -68,6 +68,7 @@ export function createEngine(ports: EnginePorts): Engine {
         events,
         budget: createBudgetTracker(job.options.budgetUsd),
         trace,
+        reasoningEffort: job.options.reasoningEffort,
         ...(opts?.signal ? { signal: opts.signal } : {}),
       }
 
