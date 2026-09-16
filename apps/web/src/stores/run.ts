@@ -2,6 +2,7 @@ import {
   type Brief,
   type CostSummary,
   type ProgressEvent,
+  STAGE_LABELS,
   type StageName,
   type TargetResult,
   targetKey,
@@ -72,18 +73,6 @@ const patchTarget = (key: string, patch: Partial<TargetProgress>): void => {
   $run.setKey('targets', { ...targets, [key]: { ...current, ...patch } })
 }
 
-const STAGE_LABEL: Record<StageName, string> = {
-  context: 'condensing context',
-  brief: 'writing brief',
-  translate: 'translating',
-  review: 'reviewing',
-  guidelines: 'auditing guidelines',
-  judge: 'judging',
-  finalize: 'finalizing',
-  score: 'scoring',
-  backtranslate: 'back-translating',
-}
-
 type PreviewStage = keyof TargetPreview
 
 const previewStageOf = (stage: StageName, role: string): PreviewStage | null =>
@@ -127,14 +116,14 @@ export function applyProgress(event: ProgressEvent): void {
     case 'stage-started': {
       if (event.targetKey === '*') {
         for (const key of Object.keys($run.get().targets))
-          patchTarget(key, { activity: STAGE_LABEL[event.stage] })
+          patchTarget(key, { activity: STAGE_LABELS[event.stage] })
         return
       }
       const chunkCount = $run.get().targets[event.targetKey]?.chunkCount ?? 0
       const chunkLabel =
         event.chunkIndex !== null ? `, chunk ${event.chunkIndex + 1}/${chunkCount}` : ''
       patchTarget(event.targetKey, {
-        activity: `${STAGE_LABEL[event.stage]} (${event.role}${chunkLabel})`,
+        activity: `${STAGE_LABELS[event.stage]} (${event.role}${chunkLabel})`,
       })
       const stage = previewStageOf(event.stage, event.role)
       if (stage && event.chunkIndex !== null)

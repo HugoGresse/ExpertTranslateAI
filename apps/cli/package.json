@@ -5,7 +5,7 @@
   "type": "module",
   "description": "Command-line front end for the ExpertTranslateAI engine (Node adapters, JSON file storage).",
   "bin": {
-    "eta": "./src/cli.ts"
+    "eta": "./bin/eta.ts"
   },
   "engines": {
     "node": ">=22.18.0"

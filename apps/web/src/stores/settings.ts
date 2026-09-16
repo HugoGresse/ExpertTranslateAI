@@ -7,7 +7,7 @@ import type {
   RouterRule,
   Target,
 } from '@experttranslate/core'
-import { PROMPT_STAGES } from '@experttranslate/core'
+import { DEFAULT_MODEL, PROMPT_STAGES, resolveRoleModels } from '@experttranslate/core'
 import { persistentAtom, persistentMap } from '@nanostores/persistent'
 
 export type Settings = {
@@ -38,7 +38,7 @@ export type Settings = {
   preserveFormatting: 'true' | 'false'
 }
 
-export const DEFAULT_MODEL = 'anthropic/claude-sonnet-4.5'
+export { DEFAULT_MODEL }
 
 export const $settings = persistentMap<Settings>('eta.settings.', {
   translatorModel: DEFAULT_MODEL,
@@ -111,19 +111,17 @@ export const $selectedGlossaryIds = persistentAtom<string[]>(
 export const $useMemory = persistentAtom<string>('eta.useMemory', 'true')
 
 export function roleModels(s: Settings): RoleModels {
-  const a = s.translatorModel
-  const helper = s.helperModel || a
-  return {
-    translatorA: a,
-    translatorB: s.translatorBModel || a,
-    translatorC: s.translatorCModel || s.translatorBModel || a,
-    reviewer: s.reviewerModel || helper,
-    judge: s.judgeModel || s.reviewerModel || helper,
-    finalizer: s.finalizerModel || a,
-    scorer: s.scorerModel || s.reviewerModel || helper,
-    backTranslator: s.backTranslatorModel || s.translatorBModel || s.reviewerModel || helper,
-    helper,
-  }
+  return resolveRoleModels({
+    translatorA: s.translatorModel,
+    translatorB: s.translatorBModel,
+    translatorC: s.translatorCModel,
+    reviewer: s.reviewerModel,
+    judge: s.judgeModel,
+    finalizer: s.finalizerModel,
+    scorer: s.scorerModel,
+    backTranslator: s.backTranslatorModel,
+    helper: s.helperModel,
+  })
 }
 
 export const toggleId = (list: string[], id: string): string[] =>

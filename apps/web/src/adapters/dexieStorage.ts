@@ -1,15 +1,19 @@
-import type {
-  ContextSource,
-  EvalRecord,
-  GlossaryEntry,
-  GlossaryScope,
-  GuidelineSet,
-  ModelInfo,
-  Repo,
-  StoragePort,
-  TargetResult,
-  TmEntry,
-  TranslationJob,
+import {
+  type ContextSource,
+  type EvalRecord,
+  type ExportBundle,
+  type GlossaryEntry,
+  type GlossaryScope,
+  type GuidelineSet,
+  type ModelInfo,
+  normalizeBundleTables,
+  type Repo,
+  STORAGE_TABLES,
+  type StoragePort,
+  type StorageTable,
+  type TargetResult,
+  type TmEntry,
+  type TranslationJob,
 } from '@experttranslate/core'
 import Dexie, { type EntityTable } from 'dexie'
 import { logger } from './logger'
@@ -110,11 +114,18 @@ export function createDexieStorage(database: EtaDatabase = db): StoragePort {
 
 export const storage: StoragePort = createDexieStorage()
 
-export interface ExportBundle {
-  version: 1
-  exportedAt: number
-  tables: Record<string, unknown[]>
-  settings: Record<string, string>
+export type { ExportBundle } from '@experttranslate/core'
+
+/** Dexie store name for each StoragePort table (two differ for historical reasons). */
+const DEXIE_TABLE: Record<StorageTable, string> = {
+  jobs: 'jobs',
+  results: 'results',
+  contexts: 'contextSources',
+  guidelines: 'guidelineSets',
+  glossaryScopes: 'glossaryScopes',
+  glossaryEntries: 'glossaryEntries',
+  tm: 'tm',
+  evals: 'evals',
 }
 
 const EXPORTABLE_SETTING_PREFIXES = [
@@ -131,7 +142,8 @@ const isExportableSetting = (key: string): boolean =>
 
 export async function exportAll(database: EtaDatabase = db): Promise<ExportBundle> {
   const tables: Record<string, unknown[]> = {}
-  for (const table of database.tables) tables[table.name] = await table.toArray()
+  for (const name of STORAGE_TABLES)
+    tables[name] = await database.table(DEXIE_TABLE[name]).toArray()
   const settings: Record<string, string> = {}
   for (let i = 0; i < localStorage.length; i++) {
     const key = localStorage.key(i)
@@ -149,13 +161,15 @@ const isRow = (row: unknown): row is Record<string, unknown> =>
 
 export async function importAll(bundle: ExportBundle, database: EtaDatabase = db): Promise<number> {
   let count = 0
-  const known = database.tables.filter((t) => Array.isArray(bundle.tables[t.name]))
-  await database.transaction('rw', known, async () => {
-    for (const table of known) {
-      const rows = (bundle.tables[table.name] ?? []).filter(isRow)
+  const offered = normalizeBundleTables(bundle.tables)
+  const names = STORAGE_TABLES.filter((name) => offered[name] !== undefined)
+  const dexieTables = names.map((name) => database.table(DEXIE_TABLE[name]))
+  await database.transaction('rw', dexieTables, async () => {
+    for (const name of names) {
+      const rows = (offered[name] ?? []).filter(isRow)
       if (rows.length === 0) continue
-      await table.bulkPut(rows)
-      logger.debug('data.importTable', { table: table.name, rows: rows.length })
+      await database.table(DEXIE_TABLE[name]).bulkPut(rows)
+      logger.debug('data.importTable', { table: name, rows: rows.length })
       count += rows.length
     }
   })

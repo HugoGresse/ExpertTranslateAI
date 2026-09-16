@@ -1,22 +1,17 @@
-import type { LogFields, LoggerPort } from '@experttranslate/core'
+import { type LogFields, type LoggerPort, type LogLevel, levelEnabled } from '@experttranslate/core'
 
-export type LogLevel = 'debug' | 'info' | 'warn' | 'error' | 'silent'
+export type { LogLevel } from '@experttranslate/core'
+export { parseLogLevel } from '@experttranslate/core'
 
-const ORDER: Record<LogLevel, number> = { debug: 10, info: 20, warn: 30, error: 40, silent: 99 }
-
-export const parseLogLevel = (raw: string | undefined, fallback: LogLevel): LogLevel =>
-  raw === 'debug' || raw === 'info' || raw === 'warn' || raw === 'error' || raw === 'silent'
-    ? raw
-    : fallback
-
-/** JSON lines on stderr, one object per event; the level comes from ETA_LOG_LEVEL. */
+/** JSON lines on stderr, one object per event; the threshold comes from ETA_LOG_LEVEL. */
 export function createStderrLogger(
-  level: LogLevel,
+  threshold: LogLevel,
   write: (line: string) => void = (line) => process.stderr.write(`${line}\n`),
 ): LoggerPort {
-  const emit = (lvl: Exclude<LogLevel, 'silent'>, msg: string, fields?: LogFields): void => {
-    if (ORDER[lvl] < ORDER[level]) return
-    write(JSON.stringify({ time: new Date().toISOString(), level: lvl, msg, ...fields }))
+  const emit = (level: Exclude<LogLevel, 'silent'>, msg: string, fields?: LogFields): void => {
+    if (!levelEnabled(level, threshold)) return
+    // Reserved keys win over field names so a `msg` or `level` field can never mask the event.
+    write(JSON.stringify({ ...fields, time: new Date().toISOString(), level, msg }))
   }
   return {
     debug: (m, f) => emit('debug', m, f),

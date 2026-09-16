@@ -1,17 +1,9 @@
+import { isExportBundle } from '@experttranslate/core'
 import { type FC, useState } from 'react'
-import { type ExportBundle, exportAll, importAll } from '../adapters/dexieStorage'
+import { exportAll, importAll } from '../adapters/dexieStorage'
 import { logger } from '../adapters/logger'
 import { downloadText } from '../lib/download'
 import { Button, Card } from './ui'
-
-const isBundle = (x: unknown): x is ExportBundle =>
-  typeof x === 'object' &&
-  x !== null &&
-  'version' in x &&
-  x.version === 1 &&
-  'tables' in x &&
-  typeof x.tables === 'object' &&
-  x.tables !== null
 
 export const DataCard: FC = () => {
   const [status, setStatus] = useState<string | null>(null)
@@ -32,7 +24,7 @@ export const DataCard: FC = () => {
   const doImport = async (file: File): Promise<void> => {
     try {
       const parsed: unknown = JSON.parse(await file.text())
-      if (!isBundle(parsed)) throw new Error('Not an ExpertTranslateAI export')
+      if (!isExportBundle(parsed)) throw new Error('Not an ExpertTranslateAI export')
       const count = await importAll(parsed)
       logger.info('data.imported', { rows: count })
       setStatus(`Imported ${count} rows. Reload the page to see everything.`)

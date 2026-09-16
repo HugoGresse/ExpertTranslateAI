@@ -1,4 +1,9 @@
-import type { ProgressEvent, TargetResult } from '@experttranslate/core'
+import {
+  fileSafeTargetKey,
+  type ProgressEvent,
+  STAGE_LABELS,
+  type TargetResult,
+} from '@experttranslate/core'
 
 export interface Renderer {
   onEvent(event: ProgressEvent): void
@@ -30,7 +35,7 @@ export function createProgressRenderer(write: (line: string) => void): Renderer 
           if (event.targetKey === '*') return
           const chunk = event.chunkIndex === null ? '' : ` #${event.chunkIndex + 1}`
           const cost = event.usage.costUsd === null ? '' : ` ${fmtUsd(event.usage.costUsd)}`
-          write(`  ${event.targetKey}: ${event.stage}${chunk} (${event.role})${cost}`)
+          write(`  ${event.targetKey}: ${STAGE_LABELS[event.stage]}${chunk} (${event.role})${cost}`)
           return
         }
         case 'escalated':
@@ -51,7 +56,8 @@ export function createProgressRenderer(write: (line: string) => void): Renderer 
             `■ total: ${event.cost.calls} calls, ${event.cost.tokensIn} in / ${event.cost.tokensOut} out, ${fmtUsd(event.cost.usd)}`,
           )
           return
-        default:
+        case 'stage-started':
+        case 'token':
           return
       }
     },
@@ -59,4 +65,4 @@ export function createProgressRenderer(write: (line: string) => void): Renderer 
 }
 
 export const fileNameFor = (result: TargetResult): string =>
-  `${result.targetKey.replace('#', '-')}.txt`
+  `${fileSafeTargetKey(result.targetKey)}.txt`

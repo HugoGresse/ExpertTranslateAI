@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { noopLogger, type TargetResult, type TmEntry } from '@experttranslate/core'
@@ -55,9 +55,41 @@ describe('json storage', () => {
     expect(await createJsonStorage(dir, noopLogger).tm.list()).toHaveLength(20)
   })
 
-  it('imports web export rows and skips junk', async () => {
-    const s = createJsonStorage(dir, noopLogger)
-    expect(await s.importTable('tm', [entry('i1'), 'junk', null, entry('i2')])).toBe(2)
-    expect(await s.tm.get('i2')).toBeDefined()
+  it('coalesces writes that arrive while one is in flight', async () => {
+    const flushes: string[] = []
+    const logger = { ...noopLogger, debug: (msg: string) => void flushes.push(msg) }
+    const s = createJsonStorage(dir, logger)
+    await Promise.all(Array.from({ length: 20 }, (_, i) => s.tm.put(entry(`c${i}`))))
+    const writes = flushes.filter((m) => m === 'storage.flushed').length
+    expect(writes).toBeGreaterThanOrEqual(1)
+    expect(writes).toBeLessThan(20)
+  })
+
+  it('recovers after a failed write instead of failing every later one', async () => {
+    const locked = join(dir, 'locked')
+    await mkdir(locked, { mode: 0o555 })
+    const s = createJsonStorage(locked, noopLogger)
+    await expect(s.tm.put(entry('x1'))).rejects.toThrow()
+    await chmod(locked, 0o755)
+    await s.tm.put(entry('x2'))
+    expect((await createJsonStorage(locked, noopLogger).tm.list()).map((e) => e.id)).toEqual([
+      'x1',
+      'x2',
+    ])
+  })
+
+  it('retries a failed table read once the cause is fixed', async () => {
+    const blocked = join(dir, 'blocked')
+    await writeFile(blocked, 'not a directory')
+    const s = createJsonStorage(blocked, noopLogger)
+    await expect(s.tm.list()).rejects.toThrow()
+    await rm(blocked)
+    expect(await s.tm.list()).toEqual([])
+  })
+
+  it('reports a corrupt table file instead of silently starting empty', async () => {
+    await writeFile(join(dir, 'tm.json'), '{not json')
+    await chmod(join(dir, 'tm.json'), 0o644)
+    await expect(createJsonStorage(dir, noopLogger).tm.list()).rejects.toThrow()
   })
 })

@@ -1,19 +1,24 @@
 /* eslint-disable no-console */
-import type { LogFields, LoggerPort } from '@experttranslate/core'
+import {
+  type LogFields,
+  type LoggerPort,
+  type LogLevel,
+  levelEnabled,
+  parseLogLevel,
+} from '@experttranslate/core'
 
-export type LogLevel = 'debug' | 'info' | 'warn' | 'error'
+export type { LogLevel } from '@experttranslate/core'
 
-const ORDER: Record<LogLevel, number> = { debug: 10, info: 20, warn: 30, error: 40 }
 const STORAGE_KEY = 'eta.logLevel'
 
 function readLevel(): LogLevel {
+  let raw: string | null = null
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    if (raw === 'debug' || raw === 'info' || raw === 'warn' || raw === 'error') return raw
+    raw = localStorage.getItem(STORAGE_KEY)
   } catch {
     /* storage unavailable */
   }
-  return import.meta.env.DEV ? 'debug' : 'info'
+  return parseLogLevel(raw, import.meta.env.DEV ? 'debug' : 'info')
 }
 
 export function setLogLevel(level: LogLevel): void {
@@ -21,9 +26,8 @@ export function setLogLevel(level: LogLevel): void {
 }
 
 export function createConsoleLogger(): LoggerPort {
-  const enabled = (level: LogLevel): boolean => ORDER[level] >= ORDER[readLevel()]
-  const emit = (level: LogLevel, msg: string, fields?: LogFields): void => {
-    if (!enabled(level)) return
+  const emit = (level: Exclude<LogLevel, 'silent'>, msg: string, fields?: LogFields): void => {
+    if (!levelEnabled(level, readLevel())) return
     const line = `[eta] ${msg}`
     if (fields) console[level](line, fields)
     else console[level](line)

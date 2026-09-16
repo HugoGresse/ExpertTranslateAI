@@ -2,11 +2,12 @@ import { describe, expect, it } from 'vitest'
 import { parseCliArgs, parseTargets } from '../src/args.ts'
 
 describe('parseTargets', () => {
-  it('accepts region suffixes in both spellings', () => {
-    expect(parseTargets('fr, es-MX,pt:Brazil')).toEqual([
+  it('keeps hyphenated language codes intact and reads regions after a colon', () => {
+    expect(parseTargets('fr, pt-BR,zh-Hans, es:Mexico')).toEqual([
       { lang: 'fr' },
-      { lang: 'es', region: 'MX' },
-      { lang: 'pt', region: 'Brazil' },
+      { lang: 'pt-BR' },
+      { lang: 'zh-Hans' },
+      { lang: 'es', region: 'Mexico' },
     ])
   })
   it('rejects an empty list', () => {

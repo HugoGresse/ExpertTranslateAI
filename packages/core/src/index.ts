@@ -26,6 +26,12 @@ export {
   formatGuidelinesBlock,
   numberRules,
 } from './guidelines/format.ts'
+export {
+  DEFAULT_JOB_OPTIONS,
+  DEFAULT_MODEL,
+  type RoleModelOverrides,
+  resolveRoleModels,
+} from './job/defaults.ts'
 export { collectText, extractJson } from './llm/collect.ts'
 export { createLimiter, type Limiter } from './llm/limiter.ts'
 export {
@@ -37,12 +43,14 @@ export {
 export { emptyCost, findPricing, sumCosts, usageCost } from './llm/pricing.ts'
 export { LlmHttpError, LlmStreamError } from './llm/retry.ts'
 export { StreamIdleTimeoutError } from './llm/sse.ts'
+export { LOG_LEVELS, type LogLevel, levelEnabled, parseLogLevel } from './logging.ts'
 export { DIFFICULTY_ORDER, decideEscalation, nextDifficulty } from './pipeline/escalation.ts'
 export { buildEvalRecord, promptOverrideHash, wordCount } from './pipeline/evalRecord.ts'
 export { PLANS, type Plan, planFor } from './pipeline/plan.ts'
 export { routeModels } from './pipeline/router.ts'
 export { resolveSourceLang } from './pipeline/setupTarget.ts'
-export { resultKey, targetKey } from './pipeline/targetKey.ts'
+export { STAGE_LABELS } from './pipeline/stageLabels.ts'
+export { fileSafeTargetKey, resultKey, targetKey } from './pipeline/targetKey.ts'
 export type {
   ClockPort,
   EnginePorts,
@@ -77,6 +85,15 @@ export {
   detectDisagreements,
   formatDisagreements,
 } from './scoring/disagreement.ts'
+export {
+  type ExportBundle,
+  exportBundle,
+  importBundle,
+  isExportBundle,
+  normalizeBundleTables,
+  STORAGE_TABLES,
+  type StorageTable,
+} from './storage/bundle.ts'
 export { calculateChunkSize, chunkText } from './text/chunk.ts'
 export { wordEditDistance } from './text/editDistance.ts'
 export { placeholderParity, protectPlaceholders, restorePlaceholders } from './text/placeholders.ts'

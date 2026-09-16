@@ -1,4 +1,5 @@
 import {
+  fileSafeTargetKey,
   type GuidelineViolation,
   learnCorrections,
   markHumanEdit,
@@ -133,7 +134,7 @@ const FinalText: FC<{ result: TargetResult }> = ({ result }) => {
         <Button onClick={() => void navigator.clipboard.writeText(text)}>Copy</Button>
         <Button
           onClick={() =>
-            downloadText(`translation-${result.targetKey.replace('#', '-')}.txt`, text)
+            downloadText(`translation-${fileSafeTargetKey(result.targetKey)}.txt`, text)
           }
         >
           Download

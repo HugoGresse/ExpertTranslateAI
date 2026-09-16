@@ -11,38 +11,32 @@ import {
   type ResultRepo,
   resultKey,
   type StoragePort,
+  type StorageTable,
   type TargetResult,
   type TmEntry,
   type TranslationJob,
 } from '@experttranslate/core'
 
-export const TABLE_NAMES = [
-  'jobs',
-  'results',
-  'contexts',
-  'guidelines',
-  'glossaryScopes',
-  'glossaryEntries',
-  'tm',
-  'evals',
-] as const
-export type TableName = (typeof TABLE_NAMES)[number]
+const isErrno = (error: unknown): error is NodeJS.ErrnoException =>
+  error instanceof Error && 'code' in error
 
 /**
- * One JSON file per table under `dir`, loaded lazily and written atomically on every change.
- * Writes are serialised per table so concurrent puts from parallel targets cannot interleave.
+ * One compact JSON file per table under `dir`, loaded once and rewritten atomically after changes.
+ * Puts that arrive while a write is in flight are coalesced into a single trailing write, and a
+ * failed write never poisons later ones. Meant for one process at a time: two `eta` runs sharing
+ * a data dir overwrite each other's rows.
  */
 class JsonTable<T> {
-  readonly name: TableName
-  private rows: Map<string, T> | null = null
-  private loading: Promise<Map<string, T>> | null = null
-  private queue: Promise<void> = Promise.resolve()
+  readonly name: StorageTable
+  private loaded: Promise<Map<string, T>> | null = null
+  private writing: Promise<void> = Promise.resolve()
+  private pending: Promise<void> | null = null
   private readonly dir: string
   private readonly file: string
   private readonly keyOf: (row: T) => string
   private readonly logger: LoggerPort
 
-  constructor(dir: string, name: TableName, keyOf: (row: T) => string, logger: LoggerPort) {
+  constructor(dir: string, name: StorageTable, keyOf: (row: T) => string, logger: LoggerPort) {
     this.dir = dir
     this.name = name
     this.keyOf = keyOf
@@ -51,10 +45,12 @@ class JsonTable<T> {
   }
 
   private load(): Promise<Map<string, T>> {
-    if (this.rows) return Promise.resolve(this.rows)
-    // Concurrent first calls share one read so a late loader cannot replace rows already written.
-    this.loading ??= this.read()
-    return this.loading
+    // A failed read is not cached, so a later call retries once the cause is fixed.
+    this.loaded ??= this.read().catch((error: unknown) => {
+      this.loaded = null
+      throw error
+    })
+    return this.loaded
   }
 
   private async read(): Promise<Map<string, T>> {
@@ -62,8 +58,7 @@ class JsonTable<T> {
     try {
       parsed = JSON.parse(await readFile(this.file, 'utf8'))
     } catch (error) {
-      const code = (error as NodeJS.ErrnoException).code
-      if (code !== 'ENOENT') {
+      if (!isErrno(error) || error.code !== 'ENOENT') {
         this.logger.error('storage.readFailed', {
           table: this.name,
           file: this.file,
@@ -72,22 +67,31 @@ class JsonTable<T> {
         throw error
       }
     }
+    // Our own file format: an array of rows of this table's type.
     const list = Array.isArray(parsed) ? (parsed as T[]) : []
-    this.rows = new Map(list.map((row) => [this.keyOf(row), row]))
-    this.logger.debug('storage.loaded', { table: this.name, rows: this.rows.size })
-    return this.rows
+    const rows = new Map(list.map((row) => [this.keyOf(row), row]))
+    this.logger.debug('storage.loaded', { table: this.name, rows: rows.size })
+    return rows
   }
 
+  /** Schedules one write for every change made before it starts; callers await their own change. */
   private flush(): Promise<void> {
-    this.queue = this.queue.then(async () => {
-      const rows = [...(this.rows?.values() ?? [])]
+    if (this.pending) return this.pending
+    const write = this.writing.then(async () => {
+      this.pending = null
+      const rows = [...(await this.load()).values()]
       await mkdir(this.dir, { recursive: true })
       const tmp = `${this.file}.${process.pid}.tmp`
-      await writeFile(tmp, JSON.stringify(rows, null, 2), 'utf8')
+      await writeFile(tmp, JSON.stringify(rows), 'utf8')
       await rename(tmp, this.file)
       this.logger.debug('storage.flushed', { table: this.name, rows: rows.length })
     })
-    return this.queue
+    this.pending = write
+    // The chain keeps ordering; a rejection surfaces to this caller only.
+    this.writing = write.catch((error: unknown) => {
+      this.logger.warn('storage.flushFailed', { table: this.name, error: String(error) })
+    })
+    return write
   }
 
   async get(key: string): Promise<T | undefined> {
@@ -98,14 +102,14 @@ class JsonTable<T> {
     return [...(await this.load()).values()]
   }
 
-  async put(row: T): Promise<void> {
-    ;(await this.load()).set(this.keyOf(row), row)
-    await this.flush()
+  async find(predicate: (row: T) => boolean): Promise<T[]> {
+    const out: T[] = []
+    for (const row of (await this.load()).values()) if (predicate(row)) out.push(row)
+    return out
   }
 
-  async putMany(rows: T[]): Promise<void> {
-    const map = await this.load()
-    for (const row of rows) map.set(this.keyOf(row), row)
+  async put(row: T): Promise<void> {
+    ;(await this.load()).set(this.keyOf(row), row)
     await this.flush()
   }
 
@@ -128,59 +132,28 @@ const repo = <T extends { id: string }>(table: JsonTable<T>): Repo<T> => ({
   delete: (id) => table.delete(id),
 })
 
-export interface JsonStorage extends StoragePort {
-  /** Bulk insert rows exported from the web app (same table names, same row shapes). */
-  importTable(name: TableName, rows: unknown[]): Promise<number>
-}
-
-export function createJsonStorage(dir: string, logger: LoggerPort): JsonStorage {
+export function createJsonStorage(dir: string, logger: LoggerPort): StoragePort {
   const byId = <T extends { id: string }>(row: T): string => row.id
-  const jobs = new JsonTable<TranslationJob>(dir, 'jobs', byId, logger)
   const results = new JsonTable<TargetResult>(
     dir,
     'results',
     (r) => resultKey(r.jobId, r.targetKey),
     logger,
   )
-  const contexts = new JsonTable<ContextSource>(dir, 'contexts', byId, logger)
-  const guidelines = new JsonTable<GuidelineSet>(dir, 'guidelines', byId, logger)
-  const glossaryScopes = new JsonTable<GlossaryScope>(dir, 'glossaryScopes', byId, logger)
-  const glossaryEntries = new JsonTable<GlossaryEntry>(dir, 'glossaryEntries', byId, logger)
-  const tm = new JsonTable<TmEntry>(dir, 'tm', byId, logger)
-  const evals = new JsonTable<EvalRecord>(dir, 'evals', byId, logger)
-  // Rows come from this app's own export of the same table, so the shape is trusted structurally;
-  // the cast only bridges the untyped JSON boundary.
-  const importers: Record<TableName, (rows: object[]) => Promise<void>> = {
-    jobs: (rows) => jobs.putMany(rows as TranslationJob[]),
-    results: (rows) => results.putMany(rows as TargetResult[]),
-    contexts: (rows) => contexts.putMany(rows as ContextSource[]),
-    guidelines: (rows) => guidelines.putMany(rows as GuidelineSet[]),
-    glossaryScopes: (rows) => glossaryScopes.putMany(rows as GlossaryScope[]),
-    glossaryEntries: (rows) => glossaryEntries.putMany(rows as GlossaryEntry[]),
-    tm: (rows) => tm.putMany(rows as TmEntry[]),
-    evals: (rows) => evals.putMany(rows as EvalRecord[]),
-  }
   const resultRepo: ResultRepo = {
     get: (jobId, targetKey) => results.get(resultKey(jobId, targetKey)),
     put: (r) => results.put(r),
-    listByJob: async (jobId) => (await results.list()).filter((r) => r.jobId === jobId),
+    listByJob: (jobId) => results.find((r) => r.jobId === jobId),
     deleteByJob: (jobId) => results.deleteWhere((r) => r.jobId === jobId),
   }
-  const isRow = (row: unknown): row is object => typeof row === 'object' && row !== null
   return {
-    jobs: repo(jobs),
+    jobs: repo(new JsonTable<TranslationJob>(dir, 'jobs', byId, logger)),
     results: resultRepo,
-    contexts: repo(contexts),
-    guidelines: repo(guidelines),
-    glossaryScopes: repo(glossaryScopes),
-    glossaryEntries: repo(glossaryEntries),
-    tm: repo(tm),
-    evals: repo(evals),
-    async importTable(name, rows) {
-      const valid = rows.filter(isRow)
-      await importers[name](valid)
-      logger.info('storage.imported', { table: name, rows: valid.length })
-      return valid.length
-    },
+    contexts: repo(new JsonTable<ContextSource>(dir, 'contexts', byId, logger)),
+    guidelines: repo(new JsonTable<GuidelineSet>(dir, 'guidelines', byId, logger)),
+    glossaryScopes: repo(new JsonTable<GlossaryScope>(dir, 'glossaryScopes', byId, logger)),
+    glossaryEntries: repo(new JsonTable<GlossaryEntry>(dir, 'glossaryEntries', byId, logger)),
+    tm: repo(new JsonTable<TmEntry>(dir, 'tm', byId, logger)),
+    evals: repo(new JsonTable<EvalRecord>(dir, 'evals', byId, logger)),
   }
 }

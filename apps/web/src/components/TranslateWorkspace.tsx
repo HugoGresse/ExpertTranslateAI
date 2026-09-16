@@ -1,12 +1,13 @@
-import type {
-  ContextSource,
-  GlossaryScope,
-  GuidelineSet,
-  JobEstimate,
-  PromptOverrides,
-  RouterRule,
-  Target,
-  TranslationJob,
+import {
+  type ContextSource,
+  DEFAULT_JOB_OPTIONS,
+  type GlossaryScope,
+  type GuidelineSet,
+  type JobEstimate,
+  type PromptOverrides,
+  type RouterRule,
+  type Target,
+  type TranslationJob,
 } from '@experttranslate/core'
 import { useStore } from '@nanostores/react'
 import { type FC, useEffect, useMemo, useRef, useState } from 'react'
@@ -81,17 +82,27 @@ const buildJob = (
     models: roleModels(s),
     options: {
       preserveFormatting: s.preserveFormatting === 'true',
-      maxTokensPerChunk: numberSetting(s.maxTokensPerChunk, 1000),
+      maxTokensPerChunk: numberSetting(s.maxTokensPerChunk, DEFAULT_JOB_OPTIONS.maxTokensPerChunk),
       contextSourceIds: selection.contextSourceIds,
       guidelineSetIds: selection.guidelineSetIds,
-      contextTokenBudget: numberSetting(s.contextTokenBudget, 4000),
-      guidelinesTokenBudget: numberSetting(s.guidelinesTokenBudget, 1500),
+      contextTokenBudget: numberSetting(
+        s.contextTokenBudget,
+        DEFAULT_JOB_OPTIONS.contextTokenBudget,
+      ),
+      guidelinesTokenBudget: numberSetting(
+        s.guidelinesTokenBudget,
+        DEFAULT_JOB_OPTIONS.guidelinesTokenBudget,
+      ),
       budgetUsd: s.budgetUsd.trim() ? numberSetting(s.budgetUsd, 0) || null : null,
       reasoningEffort: s.reasoningEffort,
       glossaryScopeIds: selection.glossaryScopeIds,
       useMemory: selection.useMemory,
       autoEscalate: s.autoEscalate === 'true',
-      escalationConfidence: numberSetting(s.escalationConfidence, 60, 0),
+      escalationConfidence: numberSetting(
+        s.escalationConfidence,
+        DEFAULT_JOB_OPTIONS.escalationConfidence,
+        0,
+      ),
       routing: selection.routing,
       backTranslate: s.backTranslate === 'true',
       promptOverrides: selection.promptOverrides,

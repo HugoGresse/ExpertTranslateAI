@@ -1,20 +1,20 @@
-#!/usr/bin/env node
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { fileURLToPath } from 'node:url'
 import {
   createEngine,
   createOpenRouterLlm,
+  importBundle,
+  isExportBundle,
   type LlmPort,
   type LoggerPort,
   type TargetResult,
 } from '@experttranslate/core'
-import { createJsonStorage, TABLE_NAMES, type TableName } from './adapters/jsonStorage.ts'
+import { createJsonStorage } from './adapters/jsonStorage.ts'
 import { createStderrLogger, type LogLevel, parseLogLevel } from './adapters/logger.ts'
 import { createNodeFetch } from './adapters/nodeFetch.ts'
-import { type CliArgs, type CommonArgs, parseCliArgs, type TranslateArgs, USAGE } from './args.ts'
-import { buildJob } from './job.ts'
+import { type CliArgs, parseCliArgs, type TranslateArgs, USAGE } from './args.ts'
+import { buildJob, roleModelsFor } from './job.ts'
 import { loadContexts, loadGuidelineFiles } from './materials.ts'
 import { createProgressRenderer, fileNameFor } from './render.ts'
 
@@ -27,6 +27,16 @@ export interface CliDeps {
   createLlm: (apiKey: string, concurrency: number, logger: LoggerPort) => LlmPort
   now: () => number
   makeId: () => string
+  /** Abort signal fired on SIGINT/SIGTERM so the engine can persist a cancelled job. */
+  signal: AbortSignal
+  /** Last-resort reporter for errors that escape `main`, on the structured channel. */
+  fatal: (error: unknown) => void
+}
+
+interface Runtime {
+  deps: CliDeps
+  logger: LoggerPort
+  dataDir: string
 }
 
 const EXIT_OK = 0
@@ -39,24 +49,26 @@ const requireKey = (env: CliDeps['env']): string => {
   return key
 }
 
-const dataDirOf = (args: CommonArgs, env: CliDeps['env']): string =>
-  args.dataDir ?? env.ETA_DATA_DIR ?? join(homedir(), '.experttranslate')
-
-async function readSource(args: TranslateArgs, deps: CliDeps): Promise<string> {
-  if (args.input && args.input !== '-') return readFile(args.input, 'utf8')
-  if (deps.stdinIsTty) throw new Error('Give a file to translate or pipe text on stdin')
-  return deps.readStdin()
+async function readSource(args: TranslateArgs, rt: Runtime): Promise<string> {
+  if (args.input && args.input !== '-') {
+    rt.logger.debug('source.read', { file: args.input })
+    const text = await readFile(args.input, 'utf8')
+    rt.logger.debug('source.readDone', { file: args.input, chars: text.length })
+    return text
+  }
+  if (rt.deps.stdinIsTty) throw new Error('Give a file to translate or pipe text on stdin')
+  const text = await rt.deps.readStdin()
+  rt.logger.debug('source.stdin', { chars: text.length })
+  return text
 }
 
-async function runTranslate(
-  args: TranslateArgs & CommonArgs,
-  deps: CliDeps,
-  logger: LoggerPort,
-): Promise<number> {
+async function runTranslate(args: TranslateArgs, rt: Runtime): Promise<number> {
+  const { deps, logger } = rt
   const apiKey = requireKey(deps.env)
-  const sourceText = (await readSource(args, deps)).trim()
+  const sourceText = (await readSource(args, rt)).trim()
   if (!sourceText) throw new Error('Nothing to translate: the source is empty')
-  const storage = createJsonStorage(dataDirOf(args, deps.env), logger)
+  const storage = createJsonStorage(rt.dataDir, logger)
+  const llm = deps.createLlm(apiKey, args.concurrency, logger)
   const ports = {
     storage,
     fetch: createNodeFetch(logger),
@@ -65,16 +77,18 @@ async function runTranslate(
     makeId: deps.makeId,
   }
   const contextSourceIds = await loadContexts(args.contexts, ports)
-  const guidelineSetIds = [
-    ...args.guidelineSetIds,
-    ...(await loadGuidelineFiles(args.guidelineFiles, ports)),
-  ]
+  const extracted = await loadGuidelineFiles(args.guidelineFiles, ports, {
+    llm,
+    model: roleModelsFor(args).helper,
+    reasoningEffort: args.reasoning,
+    signal: deps.signal,
+  })
   const job = buildJob(args, {
     id: deps.makeId(),
     now: deps.now(),
     sourceText,
     contextSourceIds,
-    guidelineSetIds,
+    guidelineSetIds: [...args.guidelineSetIds, ...extracted],
   })
   logger.info('job.created', {
     id: job.id,
@@ -83,93 +97,76 @@ async function runTranslate(
     difficulty: job.difficulty,
     model: job.models.translatorA,
   })
-  const llm = deps.createLlm(apiKey, args.concurrency, logger)
   const engine = createEngine({ llm, storage, clock: { now: deps.now }, logger })
   const renderer = createProgressRenderer(deps.stderr)
   const results: TargetResult[] = []
   let failed = 0
-  for await (const event of engine.run(job)) {
+  for await (const event of engine.run(job, { signal: deps.signal })) {
     renderer.onEvent(event)
     if (event.type === 'target-done') results.push(event.result)
     if (event.type === 'target-failed') failed++
   }
-  await emitResults(args, results, deps, logger)
-  return failed > 0 ? EXIT_FAILED : EXIT_OK
+  await emitResults(args, results, rt)
+  if (deps.signal.aborted) deps.stderr('cancelled')
+  return failed > 0 || deps.signal.aborted ? EXIT_FAILED : EXIT_OK
 }
 
 async function emitResults(
   args: TranslateArgs,
   results: TargetResult[],
-  deps: CliDeps,
-  logger: LoggerPort,
+  rt: Runtime,
 ): Promise<void> {
-  if (args.json) {
-    deps.stdout(`${JSON.stringify(results, null, 2)}\n`)
-    return
-  }
   if (args.outDir) {
     await mkdir(args.outDir, { recursive: true })
     for (const r of results) {
       const file = join(args.outDir, fileNameFor(r))
       await writeFile(file, `${r.finalText}\n`, 'utf8')
-      logger.info('result.written', { file, targetKey: r.targetKey, chars: r.finalText.length })
-      deps.stderr(`  wrote ${file}`)
+      rt.logger.info('result.written', { file, targetKey: r.targetKey, chars: r.finalText.length })
+      rt.deps.stderr(`  wrote ${file}`)
     }
+  }
+  if (args.json) {
+    rt.deps.stdout(`${JSON.stringify(results, null, 2)}\n`)
     return
   }
+  if (args.outDir) return
   for (const r of results) {
-    if (results.length > 1) deps.stdout(`=== ${r.targetKey} ===\n`)
-    deps.stdout(`${r.finalText}\n`)
+    if (results.length > 1) rt.deps.stdout(`=== ${r.targetKey} ===\n`)
+    rt.deps.stdout(`${r.finalText}\n`)
   }
 }
 
-async function runImport(
-  file: string,
-  args: CliArgs,
-  deps: CliDeps,
-  logger: LoggerPort,
-): Promise<number> {
+async function runImport(file: string, rt: Runtime): Promise<number> {
+  rt.logger.debug('import.read', { file })
   const parsed: unknown = JSON.parse(await readFile(file, 'utf8'))
-  const tables =
-    typeof parsed === 'object' && parsed !== null && 'tables' in parsed
-      ? (parsed as { tables: unknown }).tables
-      : null
-  if (typeof tables !== 'object' || tables === null)
-    throw new Error(`${file} is not a web export (missing "tables")`)
-  const storage = createJsonStorage(dataDirOf(args, deps.env), logger)
+  if (!isExportBundle(parsed)) throw new Error(`${file} is not an ExpertTranslateAI export`)
+  const counts = await importBundle(createJsonStorage(rt.dataDir, rt.logger), parsed, rt.logger)
   let total = 0
-  for (const name of TABLE_NAMES) {
-    const rows = (tables as Record<TableName, unknown>)[name]
-    if (!Array.isArray(rows)) continue
-    const count = await storage.importTable(name, rows)
-    deps.stderr(`  ${name}: ${count} rows`)
+  for (const [name, count] of Object.entries(counts)) {
+    if (count > 0) rt.deps.stderr(`  ${name}: ${count} rows`)
     total += count
   }
-  deps.stderr(`imported ${total} rows into ${dataDirOf(args, deps.env)}`)
+  rt.deps.stderr(`imported ${total} rows into ${rt.dataDir}`)
   return EXIT_OK
 }
 
-async function runModels(
-  filter: string | null,
-  deps: CliDeps,
-  logger: LoggerPort,
-): Promise<number> {
-  const llm = deps.createLlm(requireKey(deps.env), 1, logger)
+async function runModels(filter: string | null, rt: Runtime): Promise<number> {
+  const llm = rt.deps.createLlm(requireKey(rt.deps.env), 1, rt.logger)
   const needle = filter?.toLowerCase() ?? ''
   const models = (await llm.models()).filter(
     (m) => !needle || m.id.toLowerCase().includes(needle) || m.name.toLowerCase().includes(needle),
   )
   for (const m of models)
-    deps.stdout(
+    rt.deps.stdout(
       `${m.id}\t${m.name}\t$${(m.pricing.promptUsdPerToken * 1e6).toFixed(2)}/M in, $${(m.pricing.completionUsdPerToken * 1e6).toFixed(2)}/M out\n`,
     )
-  deps.stderr(`${models.length} models`)
+  rt.deps.stderr(`${models.length} models`)
   return EXIT_OK
 }
 
-async function runKey(deps: CliDeps, logger: LoggerPort): Promise<number> {
-  const info = await deps.createLlm(requireKey(deps.env), 1, logger).keyInfo()
-  deps.stdout(
+async function runKey(rt: Runtime): Promise<number> {
+  const info = await rt.deps.createLlm(requireKey(rt.deps.env), 1, rt.logger).keyInfo()
+  rt.deps.stdout(
     `${info.label}: used $${info.usageUsd.toFixed(4)}${info.limitUsd === null ? '' : ` of $${info.limitUsd.toFixed(2)}`}${info.isFreeTier ? ' (free tier)' : ''}\n`,
   )
   return EXIT_OK
@@ -185,19 +182,24 @@ export async function main(argv: string[], deps: CliDeps): Promise<number> {
   }
   const level: LogLevel = parseLogLevel(args.logLevel ?? deps.env.ETA_LOG_LEVEL, 'warn')
   const logger = createStderrLogger(level, (line) => deps.stderr(line))
+  const rt: Runtime = {
+    deps,
+    logger,
+    dataDir: args.dataDir ?? deps.env.ETA_DATA_DIR ?? join(homedir(), '.experttranslate'),
+  }
   try {
     switch (args.command) {
       case 'help':
         deps.stdout(`${USAGE}\n`)
         return EXIT_OK
       case 'translate':
-        return await runTranslate(args, deps, logger)
+        return await runTranslate(args, rt)
       case 'import':
-        return await runImport(args.file, args, deps, logger)
+        return await runImport(args.file, rt)
       case 'models':
-        return await runModels(args.filter, deps, logger)
+        return await runModels(args.filter, rt)
       case 'key':
-        return await runKey(deps, logger)
+        return await runKey(rt)
     }
   } catch (error) {
     logger.error('cli.failed', { command: args.command, error: String(error) })
@@ -212,24 +214,29 @@ const readAll = async (): Promise<string> => {
   return Buffer.concat(chunks).toString('utf8')
 }
 
-export const realDeps = (): CliDeps => ({
-  env: process.env,
-  stdout: (text) => process.stdout.write(text),
-  stderr: (text) => process.stderr.write(`${text}\n`),
-  readStdin: readAll,
-  stdinIsTty: process.stdin.isTTY === true,
-  createLlm: (apiKey, concurrency, logger) =>
-    createOpenRouterLlm({ apiKey, concurrency, title: 'ExpertTranslateAI CLI', logger }),
-  now: () => Date.now(),
-  makeId: () => crypto.randomUUID(),
-})
-
-if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
-  main(process.argv.slice(2), realDeps()).then(
-    (code) => process.exit(code),
-    (error: unknown) => {
-      process.stderr.write(`fatal: ${error instanceof Error ? error.stack : String(error)}\n`)
-      process.exit(EXIT_FAILED)
-    },
-  )
+export const realDeps = (): CliDeps => {
+  const controller = new AbortController()
+  const abort = (signal: string): void => {
+    if (!controller.signal.aborted) controller.abort(new Error(`received ${signal}`))
+  }
+  process.once('SIGINT', () => abort('SIGINT'))
+  process.once('SIGTERM', () => abort('SIGTERM'))
+  const fatalLogger = createStderrLogger('error')
+  return {
+    env: process.env,
+    stdout: (text) => process.stdout.write(text),
+    stderr: (text) => process.stderr.write(`${text}\n`),
+    readStdin: readAll,
+    stdinIsTty: process.stdin.isTTY === true,
+    createLlm: (apiKey, concurrency, logger) =>
+      createOpenRouterLlm({ apiKey, concurrency, title: 'ExpertTranslateAI CLI', logger }),
+    now: () => Date.now(),
+    makeId: () => crypto.randomUUID(),
+    signal: controller.signal,
+    fatal: (error) =>
+      fatalLogger.error('cli.fatal', {
+        error: String(error),
+        ...(error instanceof Error && error.stack ? { stack: error.stack } : {}),
+      }),
+  }
 }
