@@ -1,7 +1,5 @@
+import { progressSse } from '@experttranslate/core/testing'
 import { expect, test } from '@playwright/test'
-
-const sse = (events: unknown[]): string =>
-  [...events.map((e) => `data: ${JSON.stringify(e)}`), 'data: [DONE]', ''].join('\n\n')
 
 test('a configured server runs the job without a local key and history keeps the result', async ({
   page,
@@ -76,7 +74,7 @@ test('a configured server runs the job without a local key and history keeps the
     return route.fulfill({
       status: 200,
       headers: { 'content-type': 'text/event-stream' },
-      body: sse([
+      body: progressSse([
         { type: 'job-started', jobId: body.job.id, targets: [{ lang: 'fr' }] },
         { type: 'target-started', lang: 'fr', targetKey: 'fr', chunkCount: 1, placeholders: {} },
         { type: 'target-done', lang: 'fr', targetKey: 'fr', result },
