@@ -86,3 +86,63 @@ describe('createOpenRouterLlm', () => {
     })
   })
 })
+
+describe('idle timeout', () => {
+  const stall = (): ReadableStream<Uint8Array> => new ReadableStream({ start: () => undefined })
+
+  it('retries a stream that never sends data, then succeeds', async () => {
+    let calls = 0
+    const fetchImpl: typeof fetch = () => {
+      calls++
+      if (calls === 1) return Promise.resolve(new Response(stall(), { status: 200 }))
+      return Promise.resolve(
+        new Response(sse([JSON.stringify({ choices: [{ delta: { content: 'ok' } }] }), '[DONE]']), {
+          status: 200,
+        }),
+      )
+    }
+    const llm = createOpenRouterLlm({
+      apiKey: 'k',
+      fetch: fetchImpl,
+      idleTimeoutMs: 20,
+      retry: { maxAttempts: 3, baseDelayMs: 1, maxDelayMs: 2 },
+    })
+    const out = []
+    for await (const c of llm.chat({ model: 'm', messages: [] })) out.push(c)
+    expect(calls).toBe(2)
+    expect(out[0]).toEqual({ type: 'delta', text: 'ok' })
+  })
+
+  it('does not retry once tokens were already delivered', async () => {
+    const encoder = new TextEncoder()
+    const partial = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(
+          encoder.encode(
+            `data: ${JSON.stringify({ choices: [{ delta: { content: 'partial' } }] })}\n\n`,
+          ),
+        )
+      },
+    })
+    let calls = 0
+    const fetchImpl: typeof fetch = () => {
+      calls++
+      return Promise.resolve(new Response(partial, { status: 200 }))
+    }
+    const llm = createOpenRouterLlm({
+      apiKey: 'k',
+      fetch: fetchImpl,
+      idleTimeoutMs: 20,
+      retry: { maxAttempts: 3, baseDelayMs: 1, maxDelayMs: 2 },
+    })
+    const out: string[] = []
+    await expect(
+      (async () => {
+        for await (const c of llm.chat({ model: 'm', messages: [] }))
+          if (c.type === 'delta') out.push(c.text)
+      })(),
+    ).rejects.toThrow('No data received')
+    expect(out).toEqual(['partial'])
+    expect(calls).toBe(1)
+  })
+})

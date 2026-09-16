@@ -1,3 +1,5 @@
+import { StreamIdleTimeoutError } from './sse.ts'
+
 export class LlmHttpError extends Error {
   constructor(
     readonly status: number,
@@ -25,6 +27,7 @@ export const defaultRetryOptions: RetryOptions = {
 export function isRetryable(error: unknown): boolean {
   if (error instanceof LlmHttpError) return error.status === 429 || error.status >= 500
   if (error instanceof DOMException && error.name === 'AbortError') return false
+  if (error instanceof StreamIdleTimeoutError) return true
   return error instanceof TypeError
 }
 

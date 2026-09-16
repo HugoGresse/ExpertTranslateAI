@@ -1,5 +1,6 @@
 export interface Limiter {
   run<T>(fn: () => Promise<T>): Promise<T>
+  acquire(): Promise<() => void>
   readonly pending: number
   readonly active: number
 }
@@ -33,6 +34,15 @@ export function createLimiter(concurrency: number): Limiter {
       try {
         return await fn()
       } finally {
+        release()
+      }
+    },
+    async acquire() {
+      await acquire()
+      let released = false
+      return () => {
+        if (released) return
+        released = true
         release()
       }
     },
