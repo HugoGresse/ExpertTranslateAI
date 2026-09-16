@@ -7,12 +7,19 @@ export interface ModelPickerProps {
   value: string
   onChange: (id: string) => void
   loading?: boolean
+  allowEmpty?: boolean
 }
 
 const perMillion = (usdPerToken: number): string =>
   usdPerToken < 0 ? 'variable' : `$${(usdPerToken * 1_000_000).toFixed(2)}/M`
 
-export const ModelPicker: FC<ModelPickerProps> = ({ models, value, onChange, loading = false }) => {
+export const ModelPicker: FC<ModelPickerProps> = ({
+  models,
+  value,
+  onChange,
+  loading = false,
+  allowEmpty = false,
+}) => {
   const [query, setQuery] = useState('')
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -38,7 +45,8 @@ export const ModelPicker: FC<ModelPickerProps> = ({ models, value, onChange, loa
         onChange={(e) => onChange(e.target.value)}
         disabled={loading}
       >
-        {!selected ? <option value={value}>{value}</option> : null}
+        {allowEmpty ? <option value="">Default</option> : null}
+        {!selected && value ? <option value={value}>{value}</option> : null}
         {filtered.map((m) => (
           <option key={m.id} value={m.id}>
             {m.name} — {perMillion(m.pricing.promptUsdPerToken)} in /{' '}

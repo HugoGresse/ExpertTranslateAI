@@ -1,27 +1,22 @@
-import {
-  activeContextSources,
-  buildContextBlock,
-  ensureDigests,
-  truncateToTokens,
-} from './context/prepare.ts'
-import { checkGuidelines } from './guidelines/check.ts'
-import { activeGuidelineSets, formatGuidelinesBlock } from './guidelines/format.ts'
+import { ensureDigests } from './context/prepare.ts'
 import { addUsage, emptyCost, findPricing, sumCosts, usageCost } from './llm/pricing.ts'
+import { createBudgetTracker } from './pipeline/budget.ts'
+import type { StageContext } from './pipeline/call.ts'
 import { createEventQueue } from './pipeline/eventQueue.ts'
-import { type StageContext, translateChunk } from './pipeline/stages/translate.ts'
+import { type Plan, planFor, stageCallsPerChunk } from './pipeline/plan.ts'
+import { type JobMaterials, runTarget } from './pipeline/runTarget.ts'
+import { runBrief } from './pipeline/stages/brief.ts'
 import type { EnginePorts, Repo } from './ports.ts'
 import { chunkText } from './text/chunk.ts'
-import { placeholderParity, protectPlaceholders, restorePlaceholders } from './text/placeholders.ts'
 import { countTokens } from './text/tokens.ts'
 import type {
-  Candidate,
+  Brief,
   ContextSource,
   CostSummary,
-  GuidelineSet,
+  Difficulty,
   JobEstimate,
   ModelInfo,
   ProgressEvent,
-  Target,
   TargetResult,
   TraceEvent,
   TranslationJob,
@@ -33,17 +28,8 @@ export interface Engine {
   estimate(job: TranslationJob, models: ModelInfo[], sources?: ContextSource[]): JobEstimate
 }
 
-interface JobMaterials {
-  sources: ContextSource[]
-  guidelineSets: GuidelineSet[]
-}
-
-const sourceLabel = (job: TranslationJob): string =>
-  job.sourceLang === AUTO_LANG ? 'the source language (detect it yourself)' : job.sourceLang
-
 const errorMessage = (error: unknown): string =>
   error instanceof Error ? error.message : String(error)
-
 const isAbort = (error: unknown): boolean =>
   error instanceof DOMException && error.name === 'AbortError'
 
@@ -53,116 +39,54 @@ async function loadByIds<T extends { id: string }>(repo: Repo<T>, ids: string[])
   return out
 }
 
-function guidelinesBlockFor(
-  sets: GuidelineSet[],
-  budget: number,
-  ctx: StageContext,
-  lang: string,
-): string {
-  const block = formatGuidelinesBlock(sets)
-  const fitted = truncateToTokens(block, budget)
-  if (fitted.truncated) ctx.logger.warn('guidelines.truncated', { lang, budget })
-  return fitted.text
+const BRIEF_MAX_TOKENS = 6000
+
+function briefSource(text: string): string {
+  if (countTokens(text) <= BRIEF_MAX_TOKENS) return text
+  const head = text.slice(0, Math.floor(text.length * 0.6))
+  const tail = text.slice(-Math.floor(text.length * 0.15))
+  return `${head}\n[...]\n${tail}`
 }
 
-async function runTarget(
-  job: TranslationJob,
-  target: Target,
-  materials: JobMaterials,
-  ctx: StageContext,
-): Promise<TargetResult> {
-  const protectedSource = protectPlaceholders(job.sourceText)
-  const chunks = chunkText(protectedSource.text, job.options.maxTokensPerChunk)
-  ctx.events.emit({ type: 'target-started', lang: target.lang, chunkCount: chunks.length })
+const needsBrief = (job: TranslationJob): boolean => job.difficulty !== 'simple'
 
-  const sources = activeContextSources(materials.sources, target.lang)
-  const context = buildContextBlock(sources, job.options.contextTokenBudget, ctx.logger)
-  const sets = activeGuidelineSets(materials.guidelineSets, target.lang)
-  const guidelinesBlock = guidelinesBlockFor(
-    sets,
-    job.options.guidelinesTokenBudget,
-    ctx,
-    target.lang,
-  )
-  ctx.logger.info('target.start', {
-    lang: target.lang,
-    chunks: chunks.length,
-    model: job.models.translatorA,
-    contextSources: sources.length,
-    contextTokens: context.tokens,
-    guidelineSets: sets.length,
-  })
-
-  const outputs = await Promise.all(
-    chunks.map((chunk) =>
-      translateChunk(
-        {
-          lang: target.lang,
-          role: 'translatorA',
-          model: job.models.translatorA,
-          chunk,
-          prompt: {
-            sourceLang: sourceLabel(job),
-            target,
-            options: job.options,
-            fullText: protectedSource.text,
-            isMultiChunk: chunks.length > 1,
-            ...(context.block ? { contextBlock: context.block } : {}),
-            ...(guidelinesBlock ? { guidelinesBlock } : {}),
-          },
-        },
-        ctx,
-      ),
-    ),
-  )
-
-  const candidates: Candidate[] = outputs.map((o) => o.candidate)
-  const trace: TraceEvent[] = outputs.map((o) => o.trace)
-  const joined = candidates.map((c) => c.text).join(chunks.length > 1 ? '\n\n' : '')
-  const parity = placeholderParity(protectedSource.text, joined)
-  if (parity.missing.length > 0 || parity.extra.length > 0) {
-    ctx.logger.warn('target.placeholderMismatch', { lang: target.lang, ...parity })
-  }
-  const finalText = restorePlaceholders(joined, protectedSource.placeholders)
-  const guidelineReport = checkGuidelines(finalText, sets, job.sourceText)
-  if (guidelineReport.length > 0) {
-    ctx.logger.warn('target.guidelineViolations', {
-      lang: target.lang,
-      count: guidelineReport.length,
-    })
-  }
-  const cost = candidates.reduce<CostSummary>((acc, c) => addUsage(acc, c.usage), emptyCost())
-  return {
-    jobId: job.id,
-    lang: target.lang,
-    chunks,
-    candidates,
-    finalText,
-    guidelineReport,
-    cost,
-    trace,
-    status: 'done',
-  }
+function resolvePlan(job: TranslationJob, brief: Brief | null): Plan {
+  const difficulty: Difficulty =
+    job.difficulty === 'auto' ? (brief?.difficulty ?? 'normal') : job.difficulty
+  return planFor(difficulty)
 }
 
 export function createEngine(ports: EnginePorts): Engine {
   return {
     run(job, opts) {
       const events = createEventQueue()
+      const trace: TraceEvent[] = []
       const ctx: StageContext = {
         llm: ports.llm,
         clock: ports.clock,
         logger: ports.logger,
         events,
+        budget: createBudgetTracker(job.options.budgetUsd),
+        trace,
         ...(opts?.signal ? { signal: opts.signal } : {}),
       }
 
-      const prepare = async (): Promise<{ materials: JobMaterials; cost: CostSummary }> => {
+      const prepare = async (): Promise<{
+        materials: JobMaterials
+        plan: Plan
+        cost: CostSummary
+      }> => {
         const [rawSources, guidelineSets] = await Promise.all([
           loadByIds(ports.storage.contexts, job.options.contextSourceIds),
           loadByIds(ports.storage.guidelines, job.options.guidelineSetIds),
         ])
-        events.emit({ type: 'stage-started', lang: '*', stage: 'context', chunkIndex: null })
+        events.emit({
+          type: 'stage-started',
+          lang: '*',
+          stage: 'context',
+          role: 'helper',
+          chunkIndex: null,
+        })
         const { sources, usages } = await ensureDigests(
           rawSources.filter((s) => s.enabled),
           {
@@ -174,25 +98,56 @@ export function createEngine(ports: EnginePorts): Engine {
             ...(opts?.signal ? { signal: opts.signal } : {}),
           },
         )
-        const cost = usages.reduce<CostSummary>((acc, u) => addUsage(acc, u), emptyCost())
+        const contextCost = usages.reduce<CostSummary>((acc, u) => addUsage(acc, u), emptyCost())
+        for (const u of usages) ctx.budget.spend(u)
         events.emit({
           type: 'stage-done',
           lang: '*',
           stage: 'context',
+          role: 'helper',
           chunkIndex: null,
           usage: {
-            promptTokens: cost.tokensIn,
-            completionTokens: cost.tokensOut,
-            costUsd: cost.usd,
+            promptTokens: contextCost.tokensIn,
+            completionTokens: contextCost.tokensOut,
+            costUsd: contextCost.usd,
           },
         })
-        return { materials: { sources, guidelineSets }, cost }
+
+        let brief: Brief | null = null
+        if (needsBrief(job)) {
+          brief = await runBrief(
+            {
+              model: job.models.helper,
+              sourceText: briefSource(job.sourceText),
+              sourceLangHint: job.sourceLang === AUTO_LANG ? 'unknown, detect it' : job.sourceLang,
+              targetLangs: job.targets.map((t) => t.lang),
+              materials: { brief: null },
+            },
+            ctx,
+          )
+          events.emit({ type: 'brief-done', brief })
+        }
+        const plan = resolvePlan(job, brief)
+        ports.logger.info('job.plan', {
+          difficulty: plan.difficulty,
+          translators: plan.translators.length,
+          review: plan.review,
+          judge: plan.judge,
+        })
+        const briefCost = trace
+          .filter((t) => t.stage === 'brief')
+          .reduce<CostSummary>((acc, t) => addUsage(acc, t.usage), emptyCost())
+        return {
+          materials: { sources, guidelineSets, brief },
+          plan,
+          cost: sumCosts([contextCost, briefCost]),
+        }
       }
 
       const execute = async (): Promise<void> => {
         events.emit({ type: 'job-started', jobId: job.id, targets: job.targets })
         await ports.storage.jobs.put({ ...job, status: 'running' })
-        let prepared: { materials: JobMaterials; cost: CostSummary }
+        let prepared: Awaited<ReturnType<typeof prepare>>
         try {
           prepared = await prepare()
         } catch (error) {
@@ -206,7 +161,7 @@ export function createEngine(ports: EnginePorts): Engine {
         const results = await Promise.all(
           job.targets.map(async (target): Promise<TargetResult | null> => {
             try {
-              const result = await runTarget(job, target, prepared.materials, ctx)
+              const result = await runTarget(job, prepared.plan, target, prepared.materials, ctx)
               await ports.storage.results.put(result)
               events.emit({ type: 'target-done', lang: target.lang, result })
               return result
@@ -246,7 +201,13 @@ export function createEngine(ports: EnginePorts): Engine {
     estimate(job, models, sources = []) {
       const sourceTokens = countTokens(job.sourceText)
       const chunkCount = chunkText(job.sourceText, job.options.maxTokensPerChunk).length
-      const callCount = chunkCount * job.targets.length
+      const difficulty: Difficulty = job.difficulty === 'auto' ? 'normal' : job.difficulty
+      const plan = planFor(difficulty)
+      const perChunk = stageCallsPerChunk(plan)
+      const callCount =
+        chunkCount * perChunk * job.targets.length +
+        (needsBrief(job) ? 1 : 0) +
+        (plan.score ? job.targets.length : 0)
       const contextTokens = sources
         .filter((s) => s.enabled && job.options.contextSourceIds.includes(s.id))
         .reduce(
@@ -254,14 +215,18 @@ export function createEngine(ports: EnginePorts): Engine {
           0,
         )
       const pricing = findPricing(models, job.models.translatorA)
-      const perCallPrompt = (chunkCount > 1 ? sourceTokens : sourceTokens) + contextTokens + 200
+      const promptPerCall = sourceTokens + contextTokens + 400
+      const outputPerCall = sourceTokens * 1.2
       const estimatedUsd = pricing
         ? usageCost(
-            { promptTokens: perCallPrompt * chunkCount, completionTokens: sourceTokens * 1.2 },
+            {
+              promptTokens: promptPerCall * callCount,
+              completionTokens: outputPerCall * callCount,
+            },
             pricing,
-          ) * job.targets.length
+          )
         : null
-      return { sourceTokens, contextTokens, chunkCount, callCount, estimatedUsd }
+      return { sourceTokens, contextTokens, chunkCount, callCount, estimatedUsd, difficulty }
     },
   }
 }

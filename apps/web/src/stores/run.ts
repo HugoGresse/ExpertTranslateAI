@@ -1,11 +1,19 @@
-import type { CostSummary, ProgressEvent, TargetResult } from '@experttranslate/core'
+import type {
+  Brief,
+  CostSummary,
+  ProgressEvent,
+  StageName,
+  TargetResult,
+} from '@experttranslate/core'
 import { map } from 'nanostores'
 
 export interface TargetProgress {
   status: 'pending' | 'running' | 'done' | 'failed'
   chunkCount: number
-  chunksDone: number
+  activity: string
   streamed: string
+  streamingStage: StageName | null
+  stageCalls: Partial<Record<StageName, number>>
   result?: TargetResult
   error?: string
 }
@@ -13,6 +21,7 @@ export interface TargetProgress {
 export interface RunState {
   status: 'idle' | 'running' | 'done' | 'cancelled' | 'failed'
   jobId: string | null
+  brief: Brief | null
   targets: Record<string, TargetProgress>
   cost: CostSummary | null
   error: string | null
@@ -21,6 +30,7 @@ export interface RunState {
 export const idleRun: RunState = {
   status: 'idle',
   jobId: null,
+  brief: null,
   targets: {},
   cost: null,
   error: null,
@@ -28,10 +38,34 @@ export const idleRun: RunState = {
 
 export const $run = map<RunState>(idleRun)
 
-const patchTarget = (lang: string, patch: Partial<TargetProgress>): void => {
+const emptyProgress = (): TargetProgress => ({
+  status: 'pending',
+  chunkCount: 0,
+  activity: 'waiting',
+  streamed: '',
+  streamingStage: null,
+  stageCalls: {},
+})
+
+const patchTarget = (
+  lang: string,
+  patch: Partial<TargetProgress> | ((p: TargetProgress) => Partial<TargetProgress>),
+): void => {
   const targets = $run.get().targets
-  const current = targets[lang] ?? { status: 'pending', chunkCount: 0, chunksDone: 0, streamed: '' }
-  $run.setKey('targets', { ...targets, [lang]: { ...current, ...patch } })
+  const current = targets[lang] ?? emptyProgress()
+  const delta = typeof patch === 'function' ? patch(current) : patch
+  $run.setKey('targets', { ...targets, [lang]: { ...current, ...delta } })
+}
+
+const STAGE_LABEL: Record<StageName, string> = {
+  context: 'condensing context',
+  brief: 'writing brief',
+  translate: 'translating',
+  review: 'reviewing',
+  guidelines: 'auditing guidelines',
+  judge: 'judging',
+  finalize: 'finalizing',
+  score: 'scoring',
 }
 
 export function applyProgress(event: ProgressEvent): void {
@@ -40,40 +74,57 @@ export function applyProgress(event: ProgressEvent): void {
       $run.set({
         status: 'running',
         jobId: event.jobId,
+        brief: null,
         cost: null,
         error: null,
-        targets: Object.fromEntries(
-          event.targets.map((t) => [
-            t.lang,
-            { status: 'pending', chunkCount: 0, chunksDone: 0, streamed: '' },
-          ]),
-        ),
+        targets: Object.fromEntries(event.targets.map((t) => [t.lang, emptyProgress()])),
       })
+      return
+    case 'brief-done':
+      $run.setKey('brief', event.brief)
       return
     case 'target-started':
       patchTarget(event.lang, { status: 'running', chunkCount: event.chunkCount })
       return
-    case 'token': {
-      const current = $run.get().targets[event.lang]
-      patchTarget(event.lang, { streamed: (current?.streamed ?? '') + event.delta })
+    case 'stage-started':
+      if (event.lang === '*') {
+        for (const lang of Object.keys($run.get().targets))
+          patchTarget(lang, { activity: STAGE_LABEL[event.stage] })
+        return
+      }
+      patchTarget(event.lang, (p) => ({
+        activity: `${STAGE_LABEL[event.stage]} (${event.role}${event.chunkIndex !== null ? `, chunk ${event.chunkIndex + 1}/${p.chunkCount}` : ''})`,
+        ...(event.stage === 'translate' &&
+        event.role === 'translatorA' &&
+        p.streamingStage !== 'finalize'
+          ? { streamed: '', streamingStage: 'translate' }
+          : {}),
+        ...(event.stage === 'finalize' ? { streamed: '', streamingStage: 'finalize' } : {}),
+      }))
       return
-    }
-    case 'stage-done': {
-      const current = $run.get().targets[event.lang]
-      patchTarget(event.lang, { chunksDone: (current?.chunksDone ?? 0) + 1 })
+    case 'token':
+      patchTarget(event.lang, (p) => {
+        const relevant =
+          event.stage === p.streamingStage &&
+          (event.stage !== 'translate' || event.role === 'translatorA')
+        return relevant ? { streamed: p.streamed + event.delta } : {}
+      })
       return
-    }
+    case 'stage-done':
+      if (event.lang === '*') return
+      patchTarget(event.lang, (p) => ({
+        stageCalls: { ...p.stageCalls, [event.stage]: (p.stageCalls[event.stage] ?? 0) + 1 },
+      }))
+      return
     case 'target-done':
-      patchTarget(event.lang, { status: 'done', result: event.result })
+      patchTarget(event.lang, { status: 'done', result: event.result, activity: 'done' })
       return
     case 'target-failed':
-      patchTarget(event.lang, { status: 'failed', error: event.error })
+      patchTarget(event.lang, { status: 'failed', error: event.error, activity: 'failed' })
       return
     case 'job-done':
       $run.setKey('cost', event.cost)
       $run.setKey('status', 'done')
-      return
-    case 'stage-started':
       return
   }
 }

@@ -113,3 +113,116 @@ describe('engine.run with context and guidelines', () => {
     expect(llm.calls).toHaveLength(1)
   })
 })
+
+describe('engine.run on normal difficulty', () => {
+  const replies: Record<string, string> = {
+    'test/helper': JSON.stringify({
+      detectedLang: 'en',
+      domain: 'technical',
+      difficulty: 'normal',
+      summary: 'Product intro',
+      tone: 'friendly',
+      audience: 'developers',
+      keyTerms: [{ term: 'Hyperfluid', note: 'keep' }],
+      risks: [],
+    }),
+    'test/model': 'Bonjour A ⟦PH0⟧',
+    'test/model-b': 'Salut B ⟦PH0⟧',
+    'test/reviewer': JSON.stringify({
+      issues: [
+        {
+          candidate: 'translatorB',
+          category: 'style',
+          severity: 'minor',
+          explanation: 'too casual',
+        },
+      ],
+      suggestions: ['keep it formal'],
+      preferred: 'translatorA',
+    }),
+    'test/finalizer': 'Bonjour final ⟦PH0⟧',
+    'test/scorer': JSON.stringify({
+      fidelity: 90,
+      terminology: 95,
+      grammar: 100,
+      naturalness: 85,
+      register: 80,
+      consistency: 90,
+      confidence: 75,
+      notes: ['ok'],
+    }),
+  }
+
+  it('runs brief, two translators, review, finalize and score', async () => {
+    const llm = createFakeLlm((req) => {
+      if (req.model === 'test/reviewer' && req.messages[0]?.content.includes('audit'))
+        return '{"violations": []}'
+      return replies[req.model] ?? 'unexpected'
+    })
+    const storage = createMemoryStorage()
+    await storage.guidelines.put({
+      id: 'g1',
+      name: 'Names',
+      enabled: true,
+      createdAt: 0,
+      rules: [{ id: 'r1', text: 'Keep Hyperfluid', kind: 'keep', pattern: 'Hyperfluid' }],
+    })
+    const engine = createEngine({ llm, storage, clock: { now: () => 1 }, logger: noopLogger })
+    const job = sampleJob({
+      targets: [{ lang: 'fr' }],
+      difficulty: 'auto',
+      sourceText: 'Hello https://x.y from Hyperfluid',
+    })
+    job.options.guidelineSetIds = ['g1']
+
+    const events = await collect(engine.run(job))
+    const brief = events.find((e) => e.type === 'brief-done')
+    expect(brief?.type).toBe('brief-done')
+    const done = events.find((e) => e.type === 'target-done')
+    if (done?.type !== 'target-done') throw new Error('no result')
+    const r = done.result
+    expect(r.plan).toEqual({ difficulty: 'normal', translators: ['translatorA', 'translatorB'] })
+    expect(r.candidates.map((c) => c.role)).toEqual(['translatorA', 'translatorB'])
+    expect(r.reviews[0]?.preferred).toBe('translatorA')
+    expect(r.judgments).toEqual([])
+    expect(r.finalText).toBe('Bonjour final https://x.y')
+    expect(r.score?.overall).toBe(91)
+    expect(r.score?.confidence).toBeGreaterThan(0)
+    expect(r.guidelineReport.map((v) => v.ruleId)).toEqual(['r1'])
+    expect(r.brief?.domain).toBe('technical')
+    const stages = r.trace.map((t) => t.stage).sort()
+    expect(stages).toEqual([
+      'brief',
+      'finalize',
+      'guidelines',
+      'review',
+      'score',
+      'translate',
+      'translate',
+    ])
+    const finalizerPrompt =
+      llm.calls.find((c) => c.request.model === 'test/finalizer')?.request.messages[1]?.content ??
+      ''
+    expect(finalizerPrompt).toContain('<BASE from="translatorA">')
+    expect(finalizerPrompt).toContain('too casual')
+  })
+
+  it('fails the target when the budget cap is hit', async () => {
+    const llm = createFakeLlm((req) => replies[req.model] ?? 'x', {
+      promptTokens: 1,
+      completionTokens: 1,
+      costUsd: 0.01,
+    })
+    const engine = createEngine({
+      llm,
+      storage: createMemoryStorage(),
+      clock: { now: () => 1 },
+      logger: noopLogger,
+    })
+    const job = sampleJob({ targets: [{ lang: 'fr' }], difficulty: 'normal' })
+    job.options.budgetUsd = 0.025
+    const events = await collect(engine.run(job))
+    const failed = events.find((e) => e.type === 'target-failed')
+    expect(failed?.type === 'target-failed' ? failed.error : '').toContain('Budget')
+  })
+})

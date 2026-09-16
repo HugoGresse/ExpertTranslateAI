@@ -21,6 +21,80 @@ export interface JobOptions {
   guidelineSetIds: string[]
   contextTokenBudget: number
   guidelinesTokenBudget: number
+  budgetUsd: number | null
+}
+
+export interface Brief {
+  detectedLang: LanguageCode
+  domain: Domain
+  difficulty: Difficulty
+  summary: string
+  tone: string
+  audience: string
+  keyTerms: { term: string; note: string }[]
+  risks: string[]
+}
+
+export type IssueCategory =
+  | 'accuracy'
+  | 'omission'
+  | 'addition'
+  | 'terminology'
+  | 'grammar'
+  | 'fluency'
+  | 'style'
+  | 'consistency'
+  | 'formatting'
+  | 'guideline'
+
+export type IssueSeverity = 'minor' | 'major' | 'critical'
+
+export interface Issue {
+  candidate: TranslatorRole
+  category: IssueCategory
+  severity: IssueSeverity
+  sourceSpan?: string
+  targetSpan?: string
+  explanation: string
+  fix?: string
+}
+
+export interface Review {
+  chunkIndex: number
+  model: string
+  issues: Issue[]
+  suggestions: string[]
+  preferred: TranslatorRole | null
+}
+
+export interface Judgment {
+  chunkIndex: number
+  model: string
+  winner: TranslatorRole | 'merge'
+  rationale: string
+  mergedText?: string
+}
+
+export interface QualityScore {
+  fidelity: number
+  terminology: number
+  grammar: number
+  naturalness: number
+  register: number
+  consistency: number
+  overall: number
+  confidence: number
+  notes: string[]
+}
+
+export class BudgetExceededError extends Error {
+  constructor(
+    readonly spentUsd: number,
+    readonly budgetUsd: number,
+  ) {
+    super(`Budget of $${budgetUsd.toFixed(4)} exceeded (spent $${spentUsd.toFixed(4)})`)
+    this.name = 'BudgetExceededError'
+  }
 }
 
 export type ContextKind = 'llms-txt' | 'markdown-url' | 'markdown-file' | 'pasted'
@@ -78,8 +152,16 @@ export type JobStatus = 'queued' | 'running' | 'done' | 'failed' | 'cancelled'
 
 export interface RoleModels {
   translatorA: string
+  translatorB: string
+  translatorC: string
+  reviewer: string
+  judge: string
+  finalizer: string
+  scorer: string
   helper: string
 }
+
+export type Role = keyof RoleModels
 
 export interface TranslationJob {
   id: string
@@ -126,7 +208,7 @@ export interface CostSummary {
 export interface TraceEvent {
   at: number
   lang: LanguageCode
-  stage: string
+  stage: StageName
   role: string
   model: string
   chunkIndex: number | null
@@ -142,6 +224,11 @@ export interface TargetResult {
   chunks: Chunk[]
   candidates: Candidate[]
   finalText: string
+  brief: Brief | null
+  plan: { difficulty: Difficulty; translators: TranslatorRole[] }
+  reviews: Review[]
+  judgments: Judgment[]
+  score: QualityScore | null
   guidelineReport: GuidelineViolation[]
   cost: CostSummary
   trace: TraceEvent[]
@@ -149,15 +236,40 @@ export interface TargetResult {
   error?: string
 }
 
+export type StageName =
+  | 'context'
+  | 'brief'
+  | 'translate'
+  | 'review'
+  | 'guidelines'
+  | 'judge'
+  | 'finalize'
+  | 'score'
+
 export type ProgressEvent =
   | { type: 'job-started'; jobId: string; targets: Target[] }
+  | { type: 'brief-done'; brief: Brief }
   | { type: 'target-started'; lang: LanguageCode; chunkCount: number }
-  | { type: 'stage-started'; lang: LanguageCode; stage: string; chunkIndex: number | null }
-  | { type: 'token'; lang: LanguageCode; stage: string; chunkIndex: number; delta: string }
+  | {
+      type: 'stage-started'
+      lang: LanguageCode
+      stage: StageName
+      role: string
+      chunkIndex: number | null
+    }
+  | {
+      type: 'token'
+      lang: LanguageCode
+      stage: StageName
+      role: string
+      chunkIndex: number
+      delta: string
+    }
   | {
       type: 'stage-done'
       lang: LanguageCode
-      stage: string
+      stage: StageName
+      role: string
       chunkIndex: number | null
       usage: Usage
     }
@@ -206,4 +318,5 @@ export interface JobEstimate {
   chunkCount: number
   callCount: number
   estimatedUsd: number | null
+  difficulty: Difficulty
 }

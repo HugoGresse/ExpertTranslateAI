@@ -22,12 +22,14 @@ import {
   $sourceDraft,
   $targets,
   numberSetting,
+  roleModels,
   type Settings,
   toggleId,
 } from '../stores/settings'
 import { KeyGate } from './KeyGate'
 import { MaterialChips } from './MaterialChips'
 import { ModelPicker } from './ModelPicker'
+import { BriefCard } from './ResultDetails'
 import { ResultPanel } from './ResultPanel'
 import { TargetPicker } from './TargetPicker'
 import { Button, Card, Field, formatUsd, inputClass } from './ui'
@@ -50,8 +52,8 @@ const buildJob = (
     sourceLang: s.sourceLang,
     targets,
     domain: 'auto',
-    difficulty: 'simple',
-    models: { translatorA: s.translatorModel, helper: s.helperModel || s.translatorModel },
+    difficulty: s.difficulty,
+    models: roleModels(s),
     options: {
       preserveFormatting: s.preserveFormatting === 'true',
       maxTokensPerChunk: numberSetting(s.maxTokensPerChunk, 1000),
@@ -59,6 +61,7 @@ const buildJob = (
       guidelineSetIds: selection.guidelineSetIds,
       contextTokenBudget: numberSetting(s.contextTokenBudget, 4000),
       guidelinesTokenBudget: numberSetting(s.guidelinesTokenBudget, 1500),
+      budgetUsd: s.budgetUsd.trim() ? numberSetting(s.budgetUsd, 0) || null : null,
       formality: s.formality,
       ...(s.tone ? { tone: s.tone } : {}),
       ...(s.audience ? { audience: s.audience } : {}),
@@ -171,6 +174,30 @@ export const TranslateWorkspace: FC = () => {
                 ))}
               </select>
             </Field>
+            <Field label="Difficulty" hint="Auto: the brief decides.">
+              <select
+                className={inputClass}
+                value={settings.difficulty}
+                onChange={(e) =>
+                  $settings.setKey('difficulty', e.target.value as Settings['difficulty'])
+                }
+              >
+                <option value="auto">Auto</option>
+                <option value="simple">Simple · 1 model</option>
+                <option value="normal">Normal · 2 models + review</option>
+                <option value="hard">Hard · 3 models + review + judge</option>
+              </select>
+            </Field>
+            <Field label="Budget cap (USD, optional)">
+              <input
+                className={inputClass}
+                type="number"
+                min={0}
+                step={0.01}
+                value={settings.budgetUsd}
+                onChange={(e) => $settings.setKey('budgetUsd', e.target.value)}
+              />
+            </Field>
             <Field label="Formality">
               <select
                 className={inputClass}
@@ -262,6 +289,7 @@ export const TranslateWorkspace: FC = () => {
         {run.status === 'cancelled' ? (
           <p className="mb-2 text-sm text-amber-700">Cancelled.</p>
         ) : null}
+        {run.brief ? <BriefCard brief={run.brief} /> : null}
         <ResultPanel targets={run.targets} />
         {run.cost ? (
           <p className="mt-3 text-xs text-neutral-600">

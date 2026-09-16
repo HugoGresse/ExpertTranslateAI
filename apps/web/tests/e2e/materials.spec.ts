@@ -14,6 +14,7 @@ test('context from a pasted llms.txt and a guideline rule reach the prompt and t
   await page.addInitScript(() => {
     localStorage.setItem('eta.openrouter.key', 'sk-or-e2e')
     localStorage.setItem('eta.settings.translatorModel', 'test/model')
+    localStorage.setItem('eta.settings.difficulty', 'simple')
     localStorage.setItem('eta.targets', JSON.stringify([{ lang: 'fr' }]))
   })
   const systemPrompts: string[] = []

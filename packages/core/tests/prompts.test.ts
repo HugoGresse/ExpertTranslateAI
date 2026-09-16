@@ -7,6 +7,7 @@ describe('translate prompt', () => {
     target: { lang: 'es', region: 'Mexico' },
     options: { preserveFormatting: true, tone: 'friendly' },
     fullText: 'First part. Second part.',
+    materials: {},
   }
 
   it('single chunk asks for the translation only', () => {

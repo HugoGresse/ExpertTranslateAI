@@ -1,5 +1,6 @@
 import type { JobOptions, Target } from '../types.ts'
 import { assembleSystem } from './assembleSystem.ts'
+import { materialBlocks, type PromptMaterials } from './materials.ts'
 
 export interface TranslatePromptInput {
   sourceLang: string
@@ -8,8 +9,7 @@ export interface TranslatePromptInput {
   fullText: string
   chunkText: string
   isMultiChunk: boolean
-  contextBlock?: string
-  guidelinesBlock?: string
+  materials: PromptMaterials
 }
 
 export interface Prompt {
@@ -38,8 +38,7 @@ export function translateSystemPrompt(input: TranslatePromptInput): string {
     role: [
       `You are an expert linguist, specializing in translation from ${input.sourceLang} to ${targetLabel(input.target)}.`,
     ],
-    ...(input.contextBlock ? { context: input.contextBlock } : {}),
-    ...(input.guidelinesBlock ? { guidelines: input.guidelinesBlock } : {}),
+    ...materialBlocks(input.materials),
     task: styleLines(input.options),
   })
 }

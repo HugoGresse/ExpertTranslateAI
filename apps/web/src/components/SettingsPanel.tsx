@@ -8,6 +8,7 @@ import { logger } from '../adapters/logger'
 import { useModels } from '../hooks/useModels'
 import { $settings } from '../stores/settings'
 import { ModelPicker } from './ModelPicker'
+import { RoleModelsCard } from './RoleModelsCard'
 import { Button, basePath, Card, Field, formatUsd, inputClass } from './ui'
 
 const KeySection: FC = () => {
@@ -100,6 +101,7 @@ export const SettingsPanel: FC = () => {
   return (
     <div className="grid gap-4 md:grid-cols-2">
       <KeySection />
+      <RoleModelsCard />
       <Card title="Defaults">
         <div className="flex flex-col gap-3">
           <Field label="Translator model">
@@ -112,17 +114,6 @@ export const SettingsPanel: FC = () => {
             <Button className="self-start" onClick={refresh}>
               Refresh catalog
             </Button>
-          </Field>
-          <Field
-            label="Helper model"
-            hint="Used to condense context and extract guideline rules. Empty = translator model."
-          >
-            <ModelPicker
-              models={models}
-              value={settings.helperModel || settings.translatorModel}
-              loading={loading}
-              onChange={(id) => $settings.setKey('helperModel', id)}
-            />
           </Field>
           <Field
             label="Context budget (tokens per source)"

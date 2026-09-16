@@ -2,6 +2,7 @@ import type { GuidelineViolation, TargetResult, TraceEvent } from '@experttransl
 import { type FC, useEffect, useState } from 'react'
 import { languageName, RTL_LANGS } from '../data/languages'
 import type { TargetProgress } from '../stores/run'
+import { CandidatesCard, ReviewCard, ScoreCard } from './ResultDetails'
 import { Button, formatUsd } from './ui'
 
 export interface ResultPanelProps {
@@ -34,6 +35,7 @@ const TraceDrawer: FC<{ trace: TraceEvent[] }> = ({ trace }) => {
             >
               <div className="flex flex-wrap gap-3 font-mono">
                 <span>{t.stage}</span>
+                <span>{t.role}</span>
                 <span>{t.model}</span>
                 <span>chunk {t.chunkIndex}</span>
                 <span>{t.latencyMs} ms</span>
@@ -46,6 +48,10 @@ const TraceDrawer: FC<{ trace: TraceEvent[] }> = ({ trace }) => {
                 <summary className="cursor-pointer">Prompt</summary>
                 <pre className="mt-1 whitespace-pre-wrap">{t.prompt.system}</pre>
                 <pre className="mt-1 whitespace-pre-wrap">{t.prompt.user}</pre>
+              </details>
+              <details className="mt-1">
+                <summary className="cursor-pointer">Output</summary>
+                <pre className="mt-1 whitespace-pre-wrap">{t.output}</pre>
               </details>
             </li>
           ))}
@@ -95,7 +101,16 @@ const FinalText: FC<{ result: TargetResult }> = ({ result }) => {
           in / {result.cost.tokensOut} out · {formatUsd(result.cost.usd)}
         </span>
       </div>
+      <p className="mt-2 text-xs text-neutral-500">
+        Pipeline: {result.plan.difficulty} · {result.plan.translators.length} translator
+        {result.plan.translators.length > 1 ? 's' : ''}
+        {result.reviews.length > 0 ? ' · reviewed' : ''}
+        {result.judgments.length > 0 ? ' · judged' : ''}
+      </p>
+      {result.score ? <ScoreCard score={result.score} /> : null}
       <GuidelineReport violations={result.guidelineReport} />
+      {result.reviews.length > 0 ? <ReviewCard reviews={result.reviews} /> : null}
+      {result.candidates.length > 1 ? <CandidatesCard result={result} /> : null}
       <TraceDrawer trace={result.trace} />
     </div>
   )
@@ -143,9 +158,7 @@ export const ResultPanel: FC<ResultPanelProps> = ({ targets }) => {
         ) : null}
         {current.status === 'running' ? (
           <div>
-            <p className="mb-1 text-xs text-neutral-500">
-              Chunk {Math.min(current.chunksDone + 1, current.chunkCount)} of {current.chunkCount}
-            </p>
+            <p className="mb-1 text-xs text-neutral-500">{current.activity}</p>
             <pre className="min-h-32 whitespace-pre-wrap rounded-md border border-neutral-200 bg-neutral-50 p-2 text-sm">
               {current.streamed}
             </pre>
