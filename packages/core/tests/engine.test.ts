@@ -226,3 +226,27 @@ describe('engine.run on normal difficulty', () => {
     expect(failed?.type === 'target-failed' ? failed.error : '').toContain('Budget')
   })
 })
+
+describe('engine.run with two targets sharing a language', () => {
+  it('keeps cost and trace per target', async () => {
+    const llm = createFakeLlm(() => 'hola')
+    const engine = createEngine({
+      llm,
+      storage: createMemoryStorage(),
+      clock: { now: () => 1 },
+      logger: noopLogger,
+    })
+    const events = await collect(
+      engine.run(sampleJob({ targets: [{ lang: 'es' }, { lang: 'es', region: 'Mexico' }] })),
+    )
+    const done = events.filter((e) => e.type === 'target-done')
+    expect(done).toHaveLength(2)
+    for (const e of done) {
+      if (e.type !== 'target-done') continue
+      expect(e.result.cost.calls).toBe(1)
+      expect(e.result.trace).toHaveLength(1)
+    }
+    const end = events.at(-1)
+    expect(end?.type === 'job-done' ? end.cost.calls : 0).toBe(2)
+  })
+})

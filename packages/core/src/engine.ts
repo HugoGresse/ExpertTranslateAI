@@ -1,5 +1,5 @@
 import { ensureDigests } from './context/prepare.ts'
-import { addUsage, emptyCost, findPricing, sumCosts, usageCost } from './llm/pricing.ts'
+import { addUsage, emptyCost, findPricing, usageCost } from './llm/pricing.ts'
 import { createBudgetTracker } from './pipeline/budget.ts'
 import type { StageContext } from './pipeline/call.ts'
 import { createEventQueue } from './pipeline/eventQueue.ts'
@@ -50,6 +50,9 @@ function briefSource(text: string): string {
 
 const needsBrief = (job: TranslationJob): boolean => job.difficulty !== 'simple'
 
+const isRelevantSource = (source: ContextSource, job: TranslationJob): boolean =>
+  source.enabled && (!source.lang || job.targets.some((t) => t.lang === source.lang))
+
 function resolvePlan(job: TranslationJob, brief: Brief | null): Plan {
   const difficulty: Difficulty =
     job.difficulty === 'auto' ? (brief?.difficulty ?? 'normal') : job.difficulty
@@ -72,47 +75,20 @@ export function createEngine(ports: EnginePorts): Engine {
         ...(opts?.signal ? { signal: opts.signal } : {}),
       }
 
-      const prepare = async (): Promise<{
-        materials: JobMaterials
-        plan: Plan
-        cost: CostSummary
-      }> => {
+      const prepare = async (): Promise<{ materials: JobMaterials; plan: Plan }> => {
         const [rawSources, guidelineSets] = await Promise.all([
           loadByIds(ports.storage.contexts, job.options.contextSourceIds),
           loadByIds(ports.storage.guidelines, job.options.guidelineSetIds),
         ])
-        events.emit({
-          type: 'stage-started',
-          lang: '*',
-          stage: 'context',
-          role: 'helper',
-          chunkIndex: null,
-        })
-        const { sources, usages } = await ensureDigests(
-          rawSources.filter((s) => s.enabled),
+        const { sources } = await ensureDigests(
+          rawSources.filter((s) => isRelevantSource(s, job)),
           {
             budgetPerSource: job.options.contextTokenBudget,
-            llm: ports.llm,
             model: job.models.helper,
             storage: ports.storage,
-            logger: ports.logger,
-            ...(opts?.signal ? { signal: opts.signal } : {}),
+            ctx,
           },
         )
-        const contextCost = usages.reduce<CostSummary>((acc, u) => addUsage(acc, u), emptyCost())
-        for (const u of usages) ctx.budget.spend(u)
-        events.emit({
-          type: 'stage-done',
-          lang: '*',
-          stage: 'context',
-          role: 'helper',
-          chunkIndex: null,
-          usage: {
-            promptTokens: contextCost.tokensIn,
-            completionTokens: contextCost.tokensOut,
-            costUsd: contextCost.usd,
-          },
-        })
 
         let brief: Brief | null = null
         if (needsBrief(job)) {
@@ -135,15 +111,14 @@ export function createEngine(ports: EnginePorts): Engine {
           review: plan.review,
           judge: plan.judge,
         })
-        const briefCost = trace
-          .filter((t) => t.stage === 'brief')
-          .reduce<CostSummary>((acc, t) => addUsage(acc, t.usage), emptyCost())
-        return {
-          materials: { sources, guidelineSets, brief },
-          plan,
-          cost: sumCosts([contextCost, briefCost]),
-        }
+        return { materials: { sources, guidelineSets, brief, trace }, plan }
       }
+
+      const targetTraces: TraceEvent[][] = []
+      const totalCost = (): CostSummary =>
+        [trace, ...targetTraces]
+          .flat()
+          .reduce<CostSummary>((acc, t) => addUsage(acc, t.usage), emptyCost())
 
       const execute = async (): Promise<void> => {
         events.emit({ type: 'job-started', jobId: job.id, targets: job.targets })
@@ -156,13 +131,21 @@ export function createEngine(ports: EnginePorts): Engine {
           await ports.storage.jobs.put({ ...job, status: isAbort(error) ? 'cancelled' : 'failed' })
           for (const t of job.targets)
             events.emit({ type: 'target-failed', lang: t.lang, error: errorMessage(error) })
-          events.emit({ type: 'job-done', jobId: job.id, cost: emptyCost() })
+          events.emit({ type: 'job-done', jobId: job.id, cost: totalCost() })
           return
         }
         const results = await Promise.all(
           job.targets.map(async (target): Promise<TargetResult | null> => {
+            const targetCtx: StageContext = { ...ctx, trace: [] }
+            targetTraces.push(targetCtx.trace)
             try {
-              const result = await runTarget(job, prepared.plan, target, prepared.materials, ctx)
+              const result = await runTarget(
+                job,
+                prepared.plan,
+                target,
+                prepared.materials,
+                targetCtx,
+              )
               await ports.storage.results.put(result)
               events.emit({ type: 'target-done', lang: target.lang, result })
               return result
@@ -185,11 +168,7 @@ export function createEngine(ports: EnginePorts): Engine {
             ? 'done'
             : 'failed'
         await ports.storage.jobs.put({ ...job, status })
-        events.emit({
-          type: 'job-done',
-          jobId: job.id,
-          cost: sumCosts([prepared.cost, ...done.map((r) => r.cost)]),
-        })
+        events.emit({ type: 'job-done', jobId: job.id, cost: totalCost() })
       }
 
       execute().then(
@@ -210,7 +189,7 @@ export function createEngine(ports: EnginePorts): Engine {
         (needsBrief(job) ? 1 : 0) +
         (plan.score ? job.targets.length : 0)
       const contextTokens = sources
-        .filter((s) => s.enabled && job.options.contextSourceIds.includes(s.id))
+        .filter((s) => isRelevantSource(s, job) && job.options.contextSourceIds.includes(s.id))
         .reduce(
           (acc, s) => acc + Math.min(countTokens(s.rawText), job.options.contextTokenBudget),
           0,

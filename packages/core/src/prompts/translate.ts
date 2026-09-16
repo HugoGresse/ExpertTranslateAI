@@ -56,7 +56,7 @@ export function translateUserPrompt(input: TranslatePromptInput): string {
   }
   const highlighted = input.fullText.replace(
     input.chunkText,
-    `<TRANSLATE_THIS>${input.chunkText}</TRANSLATE_THIS>`,
+    () => `<TRANSLATE_THIS>${input.chunkText}</TRANSLATE_THIS>`,
   )
   return [
     `Your task is to provide a professional translation from ${input.sourceLang} to ${target} of PART of a text.`,

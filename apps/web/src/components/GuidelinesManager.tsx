@@ -92,9 +92,10 @@ const SetEditor: FC<{
         model,
         set.freeText,
         () => crypto.randomUUID(),
+        { reasoningEffort: settings.reasoningEffort, logger },
       )
       logger.info('guidelines.extracted', { count: rules.length, model, ...usage })
-      setSet({ ...set, rules: [...set.rules, ...rules] })
+      setSet((prev) => ({ ...prev, rules: [...prev.rules, ...rules] }))
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {

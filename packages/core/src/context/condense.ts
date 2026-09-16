@@ -1,5 +1,4 @@
-import { collectText } from '../llm/collect.ts'
-import type { LlmPort, LoggerPort } from '../ports.ts'
+import { callRole, type StageContext } from '../pipeline/call.ts'
 import { buildCondensePrompt } from '../prompts/condenseContext.ts'
 import { countTokens } from '../text/tokens.ts'
 import type { ContextDigest, ContextSource, Usage } from '../types.ts'
@@ -19,32 +18,30 @@ export function hasFreshDigest(source: ContextSource): boolean {
 }
 
 export async function condenseSource(
-  llm: LlmPort,
   model: string,
   source: ContextSource,
   budget: number,
-  logger: LoggerPort,
-  signal?: AbortSignal,
+  ctx: StageContext,
 ): Promise<{ digest: ContextDigest; usage: Usage }> {
   const text = sourceText(source)
   const prompt = buildCondensePrompt({ name: source.name, text, targetTokens: budget })
-  logger.info('context.condense.start', {
+  ctx.logger.info('context.condense.start', {
     source: source.id,
     tokens: countTokens(text),
     budget,
     model,
   })
-  const { text: condensed, usage } = await collectText(
-    llm,
+  const { text: condensed, usage } = await callRole(
     {
+      lang: '*',
+      stage: 'context',
+      role: 'helper',
       model,
-      messages: [
-        { role: 'system', content: prompt.system },
-        { role: 'user', content: prompt.user },
-      ],
+      chunkIndex: null,
+      prompt,
       temperature: 0.2,
     },
-    signal,
+    ctx,
   )
   const digest: ContextDigest = {
     text: condensed,
@@ -52,7 +49,7 @@ export async function condenseSource(
     tokenEstimate: countTokens(condensed),
     forHash: source.contentHash,
   }
-  logger.info('context.condense.done', {
+  ctx.logger.info('context.condense.done', {
     source: source.id,
     tokens: digest.tokenEstimate,
     ...usage,

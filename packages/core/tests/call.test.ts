@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
+import { extractJson } from '../src/llm/collect.ts'
 import { createBudgetTracker } from '../src/pipeline/budget.ts'
 import { callRoleJson, type StageContext } from '../src/pipeline/call.ts'
 import { noopLogger } from '../src/ports.ts'
@@ -59,5 +60,13 @@ describe('callRoleJson', () => {
     const ctx = ctxFor(llm, 0.4)
     await callRoleJson(input, schema, ctx)
     await expect(callRoleJson(input, schema, ctx)).rejects.toThrow('Budget')
+  })
+})
+
+describe('extractJson', () => {
+  it('stops at the balanced end even when prose with brackets follows', () => {
+    const text = '{"issues":[],"suggestions":[],"preferred":null}\n\nSee note [1] above.'
+    expect(extractJson(text)).toEqual({ issues: [], suggestions: [], preferred: null })
+    expect(extractJson('{"a":"}"} trailing }')).toEqual({ a: '}' })
   })
 })

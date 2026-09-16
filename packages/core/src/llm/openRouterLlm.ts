@@ -3,7 +3,22 @@ import { noopLogger } from '../ports.ts'
 import type { ChatChunk, ChatRequest, KeyInfo, ModelInfo, Usage } from '../types.ts'
 import { createLimiter, type Limiter } from './limiter.ts'
 
-const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
+const sleep = (ms: number, signal?: AbortSignal): Promise<void> =>
+  new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new DOMException('Aborted', 'AbortError'))
+      return
+    }
+    const timer = setTimeout(() => {
+      signal?.removeEventListener('abort', onAbort)
+      resolve()
+    }, ms)
+    function onAbort(): void {
+      clearTimeout(timer)
+      reject(new DOMException('Aborted', 'AbortError'))
+    }
+    signal?.addEventListener('abort', onAbort, { once: true })
+  })
 
 import {
   backoffDelay,
@@ -39,7 +54,7 @@ interface RawUsage {
 interface RawStreamChunk {
   choices?: Array<{ delta?: { content?: string | null } }>
   usage?: RawUsage | null
-  error?: { message?: string }
+  error?: { message?: string; code?: number | string }
 }
 
 interface RawModel {
@@ -131,6 +146,7 @@ export function createOpenRouterLlm(options: OpenRouterLlmOptions): LlmPort {
         let usage: Usage | null = null
         for (let attempt = 0; attempt < retry.maxAttempts; attempt++) {
           let yielded = false
+          usage = null
           try {
             if (attempt > 0) logger.warn('openrouter.chat.retry', { model: req.model, attempt })
             const res = await request('/chat/completions', {
@@ -147,7 +163,13 @@ export function createOpenRouterLlm(options: OpenRouterLlmOptions): LlmPort {
                 logger.warn('openrouter.chat.badChunk', { data: data.slice(0, 120) })
                 continue
               }
-              if (parsed.error) throw new LlmStreamError(parsed.error.message ?? 'unknown')
+              if (parsed.error) {
+                const code = Number(parsed.error.code)
+                throw new LlmStreamError(
+                  parsed.error.message ?? 'unknown',
+                  Number.isFinite(code) ? code : null,
+                )
+              }
               const text = parsed.choices?.[0]?.delta?.content
               if (text) {
                 yielded = true
@@ -169,7 +191,7 @@ export function createOpenRouterLlm(options: OpenRouterLlmOptions): LlmPort {
             if (!canRetry) throw error
             const retryAfter = error instanceof LlmHttpError ? error.retryAfterMs : null
             const status = error instanceof LlmHttpError ? error.status : undefined
-            await sleep(backoffDelay(attempt, retry, retryAfter, status))
+            await sleep(backoffDelay(attempt, retry, retryAfter, status), signal)
           }
         }
         const finalUsage = usage ?? toUsage(null)

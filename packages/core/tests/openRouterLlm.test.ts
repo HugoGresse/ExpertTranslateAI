@@ -194,3 +194,60 @@ describe('reasoning and stream errors', () => {
     expect(out[0]).toEqual({ type: 'delta', text: 'ok' })
   })
 })
+
+describe('in-stream provider error codes', () => {
+  it('does not retry a deterministic 402 delivered inside the stream', async () => {
+    let calls = 0
+    const fetchImpl: typeof fetch = () => {
+      calls++
+      return Promise.resolve(
+        new Response(
+          sse([JSON.stringify({ error: { code: 402, message: 'Insufficient credits' } })]),
+          { status: 200 },
+        ),
+      )
+    }
+    const llm = createOpenRouterLlm({
+      apiKey: 'k',
+      fetch: fetchImpl,
+      retry: { maxAttempts: 3, baseDelayMs: 1, maxDelayMs: 2 },
+    })
+    await expect(
+      (async () => {
+        for await (const _ of llm.chat({ model: 'm', messages: [] })) {
+          /* drain */
+        }
+      })(),
+    ).rejects.toThrow('Insufficient credits')
+    expect(calls).toBe(1)
+  })
+
+  it('drops the usage of a failed attempt', async () => {
+    let calls = 0
+    const fetchImpl: typeof fetch = () => {
+      calls++
+      const lines =
+        calls === 1
+          ? [
+              JSON.stringify({
+                choices: [{ delta: {} }],
+                usage: { prompt_tokens: 999, completion_tokens: 999, cost: 9.99 },
+              }),
+              JSON.stringify({ error: { code: 500, message: 'boom' } }),
+            ]
+          : [JSON.stringify({ choices: [{ delta: { content: 'ok' } }] }), '[DONE]']
+      return Promise.resolve(new Response(sse(lines), { status: 200 }))
+    }
+    const llm = createOpenRouterLlm({
+      apiKey: 'k',
+      fetch: fetchImpl,
+      retry: { maxAttempts: 3, baseDelayMs: 1, maxDelayMs: 2 },
+    })
+    const out = []
+    for await (const c of llm.chat({ model: 'm', messages: [] })) out.push(c)
+    expect(out.at(-1)).toEqual({
+      type: 'usage',
+      usage: { promptTokens: 0, completionTokens: 0, costUsd: null },
+    })
+  })
+})

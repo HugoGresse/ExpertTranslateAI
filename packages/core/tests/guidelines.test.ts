@@ -84,6 +84,17 @@ describe('guidelines', () => {
     expect(checkGuidelines('Bonjour', [keep])).toEqual([])
   })
 
+  it('only strips a leading verb that agrees with the rule kind', () => {
+    const line = (kind: GuidelineSet['rules'][number]['kind'], text: string): string =>
+      formatGuidelinesBlock([
+        { id: 'x', name: 'X', enabled: true, createdAt: 0, rules: [{ id: 'r', text, kind }] },
+      ]).split('\n')[1] ?? ''
+    expect(line('must', 'Never translate Hyperfluid')).toBe('1. MUST Never translate Hyperfluid')
+    expect(line('must-not', 'Never translate Hyperfluid')).toBe('1. MUST NOT translate Hyperfluid')
+    expect(line('prefer', 'Avoid anglicisms')).toBe('1. PREFER Avoid anglicisms')
+    expect(line('must', 'Always use the tu form')).toBe('1. MUST use the tu form')
+  })
+
   it('reports checkability', () => {
     const rules = sets[0]?.rules ?? []
     expect(rules.map(isCheckable)).toEqual([true, false, true])

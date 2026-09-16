@@ -1,4 +1,5 @@
-import type { LlmPort, LoggerPort, StoragePort } from '../ports.ts'
+import type { StageContext } from '../pipeline/call.ts'
+import type { LoggerPort, StoragePort } from '../ports.ts'
 import { countTokens } from '../text/tokens.ts'
 import type { ContextSource, Usage } from '../types.ts'
 import { condenseSource, hasFreshDigest, needsCondense, sourceText } from './condense.ts'
@@ -31,11 +32,9 @@ export function formatContextBlock(entries: Array<{ name: string; text: string }
 
 export interface EnsureDigestsOptions {
   budgetPerSource: number
-  llm: LlmPort
   model: string
   storage: StoragePort
-  logger: LoggerPort
-  signal?: AbortSignal
+  ctx: StageContext
 }
 
 export async function ensureDigests(
@@ -50,12 +49,10 @@ export async function ensureDigests(
       continue
     }
     const { digest, usage } = await condenseSource(
-      opts.llm,
       opts.model,
       source,
       opts.budgetPerSource,
-      opts.logger,
-      opts.signal,
+      opts.ctx,
     )
     usages.push(usage)
     const updated = { ...source, condensed: digest }

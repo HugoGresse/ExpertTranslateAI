@@ -2,17 +2,32 @@ import { z } from 'zod'
 
 const roleSchema = z.enum(['translatorA', 'translatorB', 'translatorC'])
 
+const optionalText = z
+  .string()
+  .nullish()
+  .transform((v) => (v == null ? undefined : v))
+const textOr = (fallback: string) =>
+  z
+    .string()
+    .nullish()
+    .transform((v) => v ?? fallback)
+const listOr = <T extends z.ZodType>(item: T) =>
+  z
+    .array(item)
+    .nullish()
+    .transform((v) => v ?? [])
+
 export const briefSchema = z.object({
   detectedLang: z.string().min(2).max(12),
   domain: z
     .enum(['general', 'legal', 'technical', 'marketing', 'medical', 'literary', 'ui'])
     .catch('general'),
   difficulty: z.enum(['simple', 'normal', 'hard', 'critical']).catch('normal'),
-  summary: z.string().default(''),
-  tone: z.string().default(''),
-  audience: z.string().default(''),
-  keyTerms: z.array(z.object({ term: z.string(), note: z.string().default('') })).default([]),
-  risks: z.array(z.string()).default([]),
+  summary: textOr(''),
+  tone: textOr(''),
+  audience: textOr(''),
+  keyTerms: listOr(z.object({ term: z.string(), note: textOr('') })),
+  risks: listOr(z.string()),
 })
 
 export const issueSchema = z.object({
@@ -32,15 +47,15 @@ export const issueSchema = z.object({
     ])
     .catch('accuracy'),
   severity: z.enum(['minor', 'major', 'critical']).catch('minor'),
-  sourceSpan: z.string().optional(),
-  targetSpan: z.string().optional(),
+  sourceSpan: optionalText,
+  targetSpan: optionalText,
   explanation: z.string(),
-  fix: z.string().optional(),
+  fix: optionalText,
 })
 
 export const reviewSchema = z.object({
-  issues: z.array(issueSchema).default([]),
-  suggestions: z.array(z.string()).default([]),
+  issues: listOr(issueSchema),
+  suggestions: listOr(z.string()),
   preferred: roleSchema.nullable().default(null),
 })
 
@@ -51,18 +66,19 @@ export const guidelineCheckSchema = z.object({
         ruleNumber: z.number().int().positive(),
         candidate: roleSchema,
         severity: z.enum(['minor', 'major']).catch('major'),
-        targetSpan: z.string().optional(),
+        targetSpan: optionalText,
         explanation: z.string(),
-        fix: z.string().optional(),
+        fix: optionalText,
       }),
     )
-    .default([]),
+    .nullish()
+    .transform((v) => v ?? []),
 })
 
 export const judgmentSchema = z.object({
   winner: z.enum(['translatorA', 'translatorB', 'translatorC', 'merge']),
-  rationale: z.string().default(''),
-  mergedText: z.string().optional(),
+  rationale: textOr(''),
+  mergedText: optionalText,
 })
 
 const pct = z.number().min(0).max(100)
@@ -75,7 +91,7 @@ export const scoreSchema = z.object({
   register: pct,
   consistency: pct,
   confidence: pct,
-  notes: z.array(z.string()).default([]),
+  notes: listOr(z.string()),
 })
 
 export type BriefOutput = z.infer<typeof briefSchema>

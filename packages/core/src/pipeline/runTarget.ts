@@ -27,6 +27,7 @@ import type {
   Review,
   Target,
   TargetResult,
+  TraceEvent,
   TranslationJob,
   TranslatorRole,
 } from '../types.ts'
@@ -44,6 +45,7 @@ export interface JobMaterials {
   sources: ContextSource[]
   guidelineSets: GuidelineSet[]
   brief: Brief | null
+  trace: TraceEvent[]
 }
 
 interface TargetSetup {
@@ -178,7 +180,7 @@ async function processChunk(
             rules: setup.rules,
           },
           ctx,
-        )
+        ).catch((error: unknown) => degrade(error, 'guidelines', setup.lang, ctx, []))
       : Promise.resolve([]),
   ])
   const issues: Issue[] = review?.issues ?? []
@@ -251,14 +253,12 @@ export async function runTarget(
           unresolved: [...unresolved, ...regexReport.map(violationAsIssue)],
         },
         ctx,
-      )
+      ).catch((error: unknown) => degrade(error, 'score', target.lang, ctx, null))
     : null
   if (regexReport.length > 0)
     ctx.logger.warn('target.guidelineViolations', { lang: target.lang, count: regexReport.length })
 
-  const cost = ctx.trace
-    .filter((t) => t.lang === target.lang)
-    .reduce<CostSummary>((acc, t) => addUsage(acc, t.usage), emptyCost())
+  const cost = ctx.trace.reduce<CostSummary>((acc, t) => addUsage(acc, t.usage), emptyCost())
   return {
     jobId: job.id,
     lang: target.lang,
@@ -273,9 +273,25 @@ export async function runTarget(
     score,
     guidelineReport: regexReport,
     cost,
-    trace: ctx.trace.filter((t) => t.lang === target.lang || t.lang === '*'),
+    trace: [...materials.trace, ...ctx.trace],
     status: 'done',
   }
+}
+
+function degrade<T>(
+  error: unknown,
+  stage: string,
+  lang: string,
+  ctx: StageContext,
+  fallback: T,
+): T {
+  if (error instanceof DOMException && error.name === 'AbortError') throw error
+  ctx.logger.warn('stage.degraded', {
+    stage,
+    lang,
+    error: error instanceof Error ? error.message : String(error),
+  })
+  return fallback
 }
 
 const violationAsIssue = (v: GuidelineViolation): Issue => ({

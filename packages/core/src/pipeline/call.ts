@@ -39,6 +39,15 @@ const messages = (prompt: Prompt): ChatMessage[] => [
 
 export async function callRole(input: CallInput, ctx: StageContext): Promise<CallOutput> {
   ctx.budget.check()
+  ctx.budget.begin()
+  try {
+    return await performCall(input, ctx)
+  } finally {
+    ctx.budget.end()
+  }
+}
+
+async function performCall(input: CallInput, ctx: StageContext): Promise<CallOutput> {
   const started = ctx.clock.now()
   ctx.events.emit({
     type: 'stage-started',

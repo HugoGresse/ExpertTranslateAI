@@ -3,7 +3,7 @@ import type { GuidelineRule, GuidelineSet, GuidelineViolation } from '../types.t
 export function compileRulePattern(rule: GuidelineRule): RegExp | null {
   if (!rule.pattern) return null
   try {
-    return new RegExp(rule.pattern, 'iu')
+    return new RegExp(rule.pattern, 'i')
   } catch {
     return null
   }

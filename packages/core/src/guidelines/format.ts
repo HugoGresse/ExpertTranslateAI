@@ -25,10 +25,17 @@ export function numberRules(sets: GuidelineSet[]): NumberedRule[] {
   return out
 }
 
+const AGREEING_PREFIX: Record<GuidelineRule['kind'], RegExp | null> = {
+  must: /^(always|must)\s+/i,
+  'must-not': /^(never|must not|do not|don't|avoid)\s+/i,
+  prefer: /^(prefer to|prefer)\s+/i,
+  keep: /^(keep|always keep)\s+/i,
+}
+
 export function formatRule(n: NumberedRule): string {
-  const parts = [
-    `${n.number}. ${KIND_LABEL[n.rule.kind]} ${n.rule.text.replace(/^(never|always|must not|must|do not|don't|prefer to|prefer|avoid)\s+/i, '')}`,
-  ]
+  const prefix = AGREEING_PREFIX[n.rule.kind]
+  const text = prefix ? n.rule.text.replace(prefix, '') : n.rule.text
+  const parts = [`${n.number}. ${KIND_LABEL[n.rule.kind]} ${text}`]
   if (n.rule.examples?.good) parts.push(`   Good: ${n.rule.examples.good}`)
   if (n.rule.examples?.bad) parts.push(`   Bad: ${n.rule.examples.bad}`)
   return parts.join('\n')

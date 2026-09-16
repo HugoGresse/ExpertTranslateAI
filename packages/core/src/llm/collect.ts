@@ -25,6 +25,25 @@ export function extractJson(text: string): unknown {
   const candidate = (fenced?.[1] ?? text).trim()
   const start = candidate.search(/[[{]/)
   if (start < 0) throw new Error('No JSON found in model output')
-  const end = Math.max(candidate.lastIndexOf('}'), candidate.lastIndexOf(']'))
-  return JSON.parse(candidate.slice(start, end + 1))
+  return JSON.parse(candidate.slice(start, balancedEnd(candidate, start) + 1))
+}
+
+function balancedEnd(text: string, start: number): number {
+  let depth = 0
+  let inString = false
+  for (let i = start; i < text.length; i++) {
+    const ch = text[i]
+    if (inString) {
+      if (ch === '\\') i++
+      else if (ch === '"') inString = false
+      continue
+    }
+    if (ch === '"') inString = true
+    else if (ch === '{' || ch === '[') depth++
+    else if (ch === '}' || ch === ']') {
+      depth--
+      if (depth === 0) return i
+    }
+  }
+  return Math.max(text.lastIndexOf('}'), text.lastIndexOf(']'))
 }

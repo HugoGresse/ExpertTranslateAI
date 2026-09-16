@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { needsCondense } from '../src/context/condense.ts'
 import { buildContextBlock, ensureDigests, truncateToTokens } from '../src/context/prepare.ts'
+import { createBudgetTracker } from '../src/pipeline/budget.ts'
+import type { StageContext } from '../src/pipeline/call.ts'
 import { noopLogger } from '../src/ports.ts'
 import type { ContextSource } from '../src/types.ts'
 import { createFakeLlm, createMemoryStorage } from './fakes.ts'
@@ -23,17 +25,26 @@ const big: ContextSource = {
   contentHash: 'h2',
 }
 
+const ctxFor = (llm: StageContext['llm']): StageContext => ({
+  llm,
+  clock: { now: () => 0 },
+  logger: noopLogger,
+  events: { emit: () => undefined },
+  budget: createBudgetTracker(null),
+  trace: [],
+})
+
 describe('context', () => {
   it('condenses only sources over budget and persists the digest keyed by hash', async () => {
     const llm = createFakeLlm(() => 'CONDENSED DIGEST')
     const storage = createMemoryStorage()
     await storage.contexts.put(big)
+    const ctx = ctxFor(llm)
     const { sources, usages } = await ensureDigests([small, big], {
       budgetPerSource: 100,
-      llm,
       model: 'helper',
       storage,
-      logger: noopLogger,
+      ctx,
     })
     expect(llm.calls).toHaveLength(1)
     expect(usages).toHaveLength(1)
@@ -42,11 +53,11 @@ describe('context', () => {
 
     const again = await ensureDigests(sources, {
       budgetPerSource: 100,
-      llm,
       model: 'helper',
       storage,
-      logger: noopLogger,
+      ctx,
     })
+    expect(ctx.trace.map((t) => t.stage)).toEqual(['context'])
     expect(llm.calls).toHaveLength(1)
     expect(again.usages).toHaveLength(0)
   })

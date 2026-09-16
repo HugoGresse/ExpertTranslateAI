@@ -1,7 +1,10 @@
-import { collectText, extractJson } from '../llm/collect.ts'
-import type { LlmPort } from '../ports.ts'
+import { extractJson } from '../llm/collect.ts'
+import { createBudgetTracker } from '../pipeline/budget.ts'
+import { callRole } from '../pipeline/call.ts'
+import type { LlmPort, LoggerPort } from '../ports.ts'
+import { noopLogger, systemClock } from '../ports.ts'
 import { buildExtractRulesPrompt } from '../prompts/guidelines.ts'
-import type { GuidelineKind, GuidelineRule, Usage } from '../types.ts'
+import type { GuidelineKind, GuidelineRule, ReasoningEffort, Usage } from '../types.ts'
 
 interface RawRule {
   text?: unknown
@@ -36,20 +39,29 @@ export async function extractRules(
   model: string,
   freeText: string,
   makeId: () => string,
-  signal?: AbortSignal,
+  opts: { signal?: AbortSignal; reasoningEffort?: ReasoningEffort; logger?: LoggerPort } = {},
 ): Promise<{ rules: GuidelineRule[]; usage: Usage }> {
   const prompt = buildExtractRulesPrompt(freeText)
-  const { text, usage } = await collectText(
-    llm,
+  const { text, usage } = await callRole(
     {
+      lang: '*',
+      stage: 'guidelines',
+      role: 'helper',
       model,
-      messages: [
-        { role: 'system', content: prompt.system },
-        { role: 'user', content: prompt.user },
-      ],
+      chunkIndex: null,
+      prompt,
       temperature: 0,
     },
-    signal,
+    {
+      llm,
+      clock: systemClock,
+      logger: opts.logger ?? noopLogger,
+      events: { emit: () => undefined },
+      budget: createBudgetTracker(null),
+      trace: [],
+      ...(opts.reasoningEffort ? { reasoningEffort: opts.reasoningEffort } : {}),
+      ...(opts.signal ? { signal: opts.signal } : {}),
+    },
   )
   return { rules: normalizeRules(extractJson(text), makeId), usage }
 }

@@ -71,7 +71,7 @@ export const RoleModelsCard: FC = () => {
         </Field>
         <Field
           label="Budget cap per run (USD)"
-          hint="Empty = no cap. The run stops when spend exceeds it."
+          hint="Empty = no cap. No new call starts once spend, plus calls already in flight, would exceed it."
         >
           <input
             className={inputClass}
