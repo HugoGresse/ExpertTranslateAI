@@ -52,7 +52,7 @@
         "noConsole": "error",
         "noExplicitAny": "error"
       },
-      "recommended": true
+      "preset": "recommended"
     }
   },
   "overrides": [
