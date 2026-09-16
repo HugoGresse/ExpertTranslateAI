@@ -14,6 +14,13 @@ export function activeContextSources(sources: ContextSource[], lang: string): Co
   return sources.filter((s) => s.enabled && (!s.lang || s.lang === lang))
 }
 
+export function sliceSafe(text: string, end: number): string {
+  let cut = Math.min(end, text.length)
+  const code = text.charCodeAt(cut - 1)
+  if (cut > 0 && code >= 0xd800 && code <= 0xdbff) cut--
+  return text.slice(0, cut)
+}
+
 export function truncateToTokens(
   text: string,
   maxTokens: number,
@@ -21,7 +28,7 @@ export function truncateToTokens(
   if (countTokens(text) <= maxTokens) return { text, truncated: false }
   let out = text
   while (out.length > 0 && countTokens(out) > maxTokens)
-    out = out.slice(0, Math.floor(out.length * 0.85))
+    out = sliceSafe(out, Math.floor(out.length * 0.85))
   return { text: `${out}\n…`, truncated: true }
 }
 

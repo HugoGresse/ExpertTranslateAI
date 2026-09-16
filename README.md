@@ -27,6 +27,11 @@ type-checked with `tsc` after `astro sync` and `.astro` files are validated by t
 
 Requires Node 22.12 or newer.
 
+## Offline shell
+
+The app registers a service worker (`public/sw.js`) on HTTPS origins that caches same-origin assets after the
+first visit, so the pages and your IndexedDB data open without a network. Translation still needs OpenRouter.
+
 ## Deploy
 
 Pushes to `main` build the site and publish it to GitHub Pages through `.github/workflows/deploy.yaml`.

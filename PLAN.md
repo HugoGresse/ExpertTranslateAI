@@ -566,6 +566,8 @@ Back-translation with delta view, second reviewer, eval log and `/insights` dash
 **Phase 6 — Polish**
 RTL, drag-and-drop files, Markdown preservation tests, PWA offline shell (app loads without network; translation obviously still needs it), i18n of the UI itself (dogfood the pipeline).
 
+Status: phases 0–6 are implemented. Progress events now carry a `targetKey` (`lang#region`) so two targets of the same language stay separate end to end; the workspace streams each chunk of the first translator and of the finalizer; result panes switch to RTL for Arabic, Hebrew, Persian and Urdu; the source accepts dropped or picked `.txt`/`.md` files; a manifest and a same-origin service worker cache the shell for offline loading. UI i18n is deferred: the interface stays English until the pipeline is stable enough to dogfood on itself.
+
 **Phase 7 — Server option (later, out of v1 scope)**
 `apps/server`: Node adapters (`SqliteStorage` or Postgres, `NodeFetch`, server-held OpenRouter key), Hono or Astro SSR endpoint streaming `ProgressEvent`s over SSE, a `RemoteEngine` adapter in `apps/web` that talks to it instead of running core in-browser. Enables team-shared glossaries/TM, unrestricted context fetching (no CORS), and CLI/CI usage. No change to core.
 

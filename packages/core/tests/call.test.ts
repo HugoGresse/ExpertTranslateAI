@@ -18,6 +18,7 @@ const ctxFor = (llm: StageContext['llm'], budgetUsd: number | null = null): Stag
 const schema = z.object({ answer: z.number() })
 const input = {
   lang: 'fr',
+  targetKey: 'fr',
   stage: 'review' as const,
   role: 'reviewer',
   model: 'm',

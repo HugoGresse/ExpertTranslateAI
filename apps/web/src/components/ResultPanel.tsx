@@ -10,9 +10,9 @@ import {
 import { type FC, useEffect, useState } from 'react'
 import { storage } from '../adapters/dexieStorage'
 import { logger } from '../adapters/logger'
-import { languageName, RTL_LANGS } from '../data/languages'
+import { languageLabel, RTL_LANGS } from '../data/languages'
 import { downloadText } from '../lib/download'
-import type { TargetProgress } from '../stores/run'
+import { streamedText, type TargetProgress } from '../stores/run'
 import { BackTranslationCard } from './BackTranslationCard'
 import {
   CandidatesCard,
@@ -207,7 +207,7 @@ export const ResultPanel: FC<ResultPanelProps> = ({ targets }) => {
               className={`px-3 py-1.5 text-sm ${lang === active ? 'border-b-2 border-accent font-medium' : 'text-neutral-600'}`}
               onClick={() => setActive(lang)}
             >
-              {languageName(lang)} {badge}
+              {languageLabel(p?.lang ?? lang, p?.region)} {badge}
             </button>
           )
         })}
@@ -219,8 +219,15 @@ export const ResultPanel: FC<ResultPanelProps> = ({ targets }) => {
         {current.status === 'running' ? (
           <div>
             <p className="mb-1 text-xs text-neutral-500">{current.activity}</p>
-            <pre className="min-h-32 whitespace-pre-wrap rounded-md border border-neutral-200 bg-neutral-50 p-2 text-sm">
-              {restorePlaceholders(current.streamed, new Map(Object.entries(current.placeholders)))}
+            <pre
+              className="min-h-32 whitespace-pre-wrap rounded-md border border-neutral-200 bg-neutral-50 p-2 text-sm"
+              dir={RTL_LANGS.has(current.lang) ? 'rtl' : 'ltr'}
+              lang={current.lang}
+            >
+              {restorePlaceholders(
+                streamedText(current),
+                new Map(Object.entries(current.placeholders)),
+              )}
             </pre>
           </div>
         ) : null}

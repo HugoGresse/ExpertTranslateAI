@@ -14,7 +14,6 @@ import { type Plan, planFor } from './plan.ts'
 import { type ChunkOutcome, processChunk } from './processChunk.ts'
 import { type JobMaterials, setupTarget, type TargetSetup } from './setupTarget.ts'
 import { backTranslateTarget } from './stages/backTranslate.ts'
-import { targetKey } from './targetKey.ts'
 import { degrade, isAbort } from './violations.ts'
 
 export type { JobMaterials } from './setupTarget.ts'
@@ -68,7 +67,8 @@ async function maybeEscalate(
     to,
     reason: decision.reason,
   }))
-  for (const e of escalations) ctx.events.emit({ type: 'escalated', lang: setup.lang, ...e })
+  for (const e of escalations)
+    ctx.events.emit({ type: 'escalated', lang: setup.lang, targetKey: setup.key, ...e })
   try {
     const rerun = await Promise.all(
       decision.chunks.map(async (chunkIndex) => {
@@ -105,6 +105,8 @@ export async function runTarget(
   ctx.events.emit({
     type: 'target-started',
     lang: target.lang,
+    targetKey: setup.key,
+    ...(target.region ? { region: target.region } : {}),
     chunkCount: setup.chunks.length,
     placeholders,
   })
@@ -125,6 +127,7 @@ export async function runTarget(
       ? await backTranslateTarget(
           {
             lang: target.lang,
+            targetKey: setup.key,
             model: models.backTranslator,
             sourceLang: setup.sourceLang,
             targetLabel: setup.targetLabel,
@@ -141,7 +144,7 @@ export async function runTarget(
     jobId: job.id,
     lang: target.lang,
     ...(target.region ? { region: target.region } : {}),
-    targetKey: targetKey(target),
+    targetKey: setup.key,
     sourceText: job.sourceText,
     sourceLang: setup.resolvedSourceLang,
     chunks: setup.chunks,

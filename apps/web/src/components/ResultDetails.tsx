@@ -10,6 +10,7 @@ import {
   type TermViolation,
 } from '@experttranslate/core'
 import { type FC, useState } from 'react'
+import { RTL_LANGS } from '../data/languages'
 import { Button } from './ui'
 
 const DIMENSIONS: Array<{
@@ -159,7 +160,11 @@ export const CandidatesCard: FC<{ result: TargetResult }> = ({ result }) => {
                         {roleLabel(c.role)}{' '}
                         <span className="font-normal text-neutral-500">{c.model}</span>
                       </p>
-                      <pre className="whitespace-pre-wrap">
+                      <pre
+                        className="whitespace-pre-wrap"
+                        dir={RTL_LANGS.has(result.lang) ? 'rtl' : 'ltr'}
+                        lang={result.lang}
+                      >
                         {restorePlaceholders(c.text, placeholders)}
                       </pre>
                     </div>

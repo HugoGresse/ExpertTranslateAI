@@ -14,6 +14,7 @@ export interface CandidateViolation extends GuidelineViolation {
 export async function checkChunkGuidelines(
   input: GuidelineCheckPromptInput & {
     lang: string
+    targetKey: string
     model: string
     chunkIndex: number
     rules: NumberedRule[]
@@ -24,6 +25,7 @@ export async function checkChunkGuidelines(
   const { value } = await callRoleJson(
     {
       lang: input.lang,
+      targetKey: input.targetKey,
       stage: 'guidelines',
       role: 'reviewer',
       model: input.model,

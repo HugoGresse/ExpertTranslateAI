@@ -4,12 +4,13 @@ import type { Judgment } from '../../types.ts'
 import { callRoleJson, type StageContext } from '../call.ts'
 
 export async function judgeChunk(
-  input: JudgePromptInput & { lang: string; model: string; chunkIndex: number },
+  input: JudgePromptInput & { lang: string; targetKey: string; model: string; chunkIndex: number },
   ctx: StageContext,
 ): Promise<Judgment> {
   const { value } = await callRoleJson(
     {
       lang: input.lang,
+      targetKey: input.targetKey,
       stage: 'judge',
       role: 'judge',
       model: input.model,

@@ -1,4 +1,4 @@
-import { ensureDigests } from './context/prepare.ts'
+import { ensureDigests, sliceSafe } from './context/prepare.ts'
 import { addUsage, emptyCost, findPricing, usageCost } from './llm/pricing.ts'
 import { createBudgetTracker } from './pipeline/budget.ts'
 import type { StageContext } from './pipeline/call.ts'
@@ -8,6 +8,7 @@ import { type Plan, planFor, stageCallsPerChunk } from './pipeline/plan.ts'
 import { routeModels } from './pipeline/router.ts'
 import { type JobMaterials, runTarget } from './pipeline/runTarget.ts'
 import { runBrief } from './pipeline/stages/brief.ts'
+import { targetKey } from './pipeline/targetKey.ts'
 import type { EnginePorts, Repo } from './ports.ts'
 import { chunkText } from './text/chunk.ts'
 import { countTokens } from './text/tokens.ts'
@@ -32,6 +33,7 @@ export interface Engine {
 
 const errorMessage = (error: unknown): string =>
   error instanceof Error ? error.message : String(error)
+const isLowSurrogate = (code: number): boolean => code >= 0xdc00 && code <= 0xdfff
 const isAbort = (error: unknown): boolean =>
   error instanceof DOMException && error.name === 'AbortError'
 
@@ -45,8 +47,9 @@ const BRIEF_MAX_TOKENS = 6000
 
 function briefSource(text: string): string {
   if (countTokens(text) <= BRIEF_MAX_TOKENS) return text
-  const head = text.slice(0, Math.floor(text.length * 0.6))
-  const tail = text.slice(-Math.floor(text.length * 0.15))
+  const head = sliceSafe(text, Math.floor(text.length * 0.6))
+  const tailStart = text.length - Math.floor(text.length * 0.15)
+  const tail = text.slice(tailStart + (isLowSurrogate(text.charCodeAt(tailStart)) ? 1 : 0))
   return `${head}\n[...]\n${tail}`
 }
 
@@ -159,7 +162,12 @@ export function createEngine(ports: EnginePorts): Engine {
           ports.logger.error('job.prepareFailed', { error: errorMessage(error) })
           await ports.storage.jobs.put({ ...job, status: isAbort(error) ? 'cancelled' : 'failed' })
           for (const t of job.targets)
-            events.emit({ type: 'target-failed', lang: t.lang, error: errorMessage(error) })
+            events.emit({
+              type: 'target-failed',
+              lang: t.lang,
+              targetKey: targetKey(t),
+              error: errorMessage(error),
+            })
           events.emit({ type: 'job-done', jobId: job.id, cost: totalCost() })
           return
         }
@@ -176,7 +184,12 @@ export function createEngine(ports: EnginePorts): Engine {
                 targetCtx,
               )
               await ports.storage.results.put(result)
-              events.emit({ type: 'target-done', lang: target.lang, result })
+              events.emit({
+                type: 'target-done',
+                lang: target.lang,
+                targetKey: result.targetKey,
+                result,
+              })
               try {
                 await ports.storage.evals.put(
                   buildEvalRecord(job, prepared.materials.models, result, ports.clock.now()),
@@ -195,7 +208,12 @@ export function createEngine(ports: EnginePorts): Engine {
                 status,
                 error: errorMessage(error),
               })
-              events.emit({ type: 'target-failed', lang: target.lang, error: errorMessage(error) })
+              events.emit({
+                type: 'target-failed',
+                lang: target.lang,
+                targetKey: targetKey(target),
+                error: errorMessage(error),
+              })
               return null
             }
           }),

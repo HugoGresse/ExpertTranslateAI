@@ -56,6 +56,7 @@ export async function evaluateOutcomes(
     ? await scoreTarget(
         {
           lang: setup.lang,
+          targetKey: setup.key,
           model: models.scorer,
           sourceLang: setup.sourceLang,
           targetLabel: setup.targetLabel,

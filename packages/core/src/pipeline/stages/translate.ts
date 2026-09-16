@@ -4,6 +4,7 @@ import { callRole, type StageContext } from '../call.ts'
 
 export interface TranslateStageInput {
   lang: string
+  targetKey: string
   role: TranslatorRole
   model: string
   chunk: Chunk
@@ -18,6 +19,7 @@ export async function translateChunk(
   const { text, usage } = await callRole(
     {
       lang: input.lang,
+      targetKey: input.targetKey,
       stage: 'translate',
       role: input.role,
       model: input.model,

@@ -6,6 +6,7 @@ import { callRole, callRoleJson, type StageContext } from '../call.ts'
 
 export interface BackTranslateInput {
   lang: string
+  targetKey: string
   model: string
   sourceLang: string
   targetLabel: string
@@ -21,6 +22,7 @@ export async function backTranslateTarget(
   const { text } = await callRole(
     {
       lang: input.lang,
+      targetKey: input.targetKey,
       stage: 'backtranslate',
       role: 'backTranslator',
       model: input.model,
@@ -33,6 +35,7 @@ export async function backTranslateTarget(
   const { value } = await callRoleJson(
     {
       lang: input.lang,
+      targetKey: input.targetKey,
       stage: 'backtranslate',
       role: 'backTranslator',
       model: input.model,

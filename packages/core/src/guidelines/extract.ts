@@ -45,6 +45,7 @@ export async function extractRules(
   const { text, usage } = await callRole(
     {
       lang: '*',
+      targetKey: '*',
       stage: 'guidelines',
       role: 'helper',
       model,

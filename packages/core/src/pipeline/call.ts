@@ -18,6 +18,7 @@ export interface StageContext {
 
 export interface CallInput {
   lang: string
+  targetKey: string
   stage: StageName
   role: string
   model: string
@@ -52,6 +53,7 @@ async function performCall(input: CallInput, ctx: StageContext): Promise<CallOut
   ctx.events.emit({
     type: 'stage-started',
     lang: input.lang,
+    targetKey: input.targetKey,
     stage: input.stage,
     role: input.role,
     chunkIndex: input.chunkIndex,
@@ -79,6 +81,7 @@ async function performCall(input: CallInput, ctx: StageContext): Promise<CallOut
         ctx.events.emit({
           type: 'token',
           lang: input.lang,
+          targetKey: input.targetKey,
           stage: input.stage,
           role: input.role,
           chunkIndex: input.chunkIndex,
@@ -107,6 +110,7 @@ async function performCall(input: CallInput, ctx: StageContext): Promise<CallOut
   ctx.events.emit({
     type: 'stage-done',
     lang: input.lang,
+    targetKey: input.targetKey,
     stage: input.stage,
     role: input.role,
     chunkIndex: input.chunkIndex,

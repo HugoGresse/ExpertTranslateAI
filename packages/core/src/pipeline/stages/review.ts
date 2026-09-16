@@ -14,12 +14,13 @@ const toIssue = (i: ReviewOutput['issues'][number]): Issue => ({
 })
 
 export async function reviewChunk(
-  input: ReviewPromptInput & { lang: string; model: string; chunkIndex: number },
+  input: ReviewPromptInput & { lang: string; targetKey: string; model: string; chunkIndex: number },
   ctx: StageContext,
 ): Promise<Review> {
   const { value } = await callRoleJson(
     {
       lang: input.lang,
+      targetKey: input.targetKey,
       stage: 'review',
       role: 'reviewer',
       model: input.model,

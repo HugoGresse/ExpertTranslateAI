@@ -7,7 +7,7 @@ import {
   needsCondense,
 } from '@experttranslate/core'
 import { useStore } from '@nanostores/react'
-import { type FC, useState } from 'react'
+import { type FC, useMemo, useState } from 'react'
 import { browserFetch } from '../adapters/browserFetch'
 import { storage } from '../adapters/dexieStorage'
 import { logger } from '../adapters/logger'
@@ -19,6 +19,21 @@ import { Button, Card, Field, inputClass } from './ui'
 type Mode = 'url' | 'file' | 'paste'
 
 const readFile = (file: File): Promise<string> => file.text()
+
+function normalizeUrl(raw: string): string {
+  const trimmed = raw.trim()
+  if (!trimmed) throw new Error('Enter a URL first')
+  const withScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`
+  let parsed: URL
+  try {
+    parsed = new URL(withScheme)
+  } catch {
+    throw new Error('That does not look like a valid URL')
+  }
+  if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:')
+    throw new Error('Only http(s) URLs are supported')
+  return parsed.toString()
+}
 
 async function buildSource(input: {
   name: string
@@ -67,9 +82,9 @@ const AddSourceForm: FC<{ onAdd: (s: ContextSource) => Promise<void> }> = ({ onA
       let kind: ContextKind = 'pasted'
       let sourceUrl: string | undefined
       if (mode === 'url') {
-        const { body } = await browserFetch.text(url.trim())
+        sourceUrl = normalizeUrl(url)
+        const { body } = await browserFetch.text(sourceUrl)
         rawText = body
-        sourceUrl = url.trim()
         kind = isLlmsTxt(body, sourceUrl) ? 'llms-txt' : 'markdown-url'
       } else if (mode === 'file') {
         if (!file) throw new Error('Choose a file first')
@@ -180,17 +195,22 @@ const SourceRow: FC<{
 }> = ({ source, budget, onSave, onDelete }) => {
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
-  const tokens = countTokens(source.rawText)
-  const condense = needsCondense(source, budget)
+  const [error, setError] = useState<string | null>(null)
+  const tokens = useMemo(() => countTokens(source.rawText), [source.rawText])
+  const condense = useMemo(() => needsCondense(source, budget), [source, budget])
   const digestFresh = source.condensed?.forHash === source.contentHash
 
   const refetch = async (): Promise<void> => {
     if (!source.url) return
     setBusy(true)
+    setError(null)
     try {
       const { body } = await browserFetch.text(source.url)
       const hash = await contentHash(body)
       await onSave({ ...source, rawText: body, contentHash: hash, fetchedAt: Date.now() })
+    } catch (e) {
+      logger.warn('context.refetchFailed', { source: source.id, error: String(e) })
+      setError(e instanceof Error ? e.message : String(e))
     } finally {
       setBusy(false)
     }
@@ -235,6 +255,7 @@ const SourceRow: FC<{
           : 'used as-is'}
         {source.fetchedAt ? ` · fetched ${new Date(source.fetchedAt).toLocaleString()}` : ''}
       </p>
+      {error ? <p className="mt-1 text-xs text-red-700">{error}</p> : null}
       {open ? (
         <div className="mt-2 grid gap-2 md:grid-cols-2">
           <pre className="max-h-64 overflow-auto whitespace-pre-wrap rounded bg-neutral-50 p-2 text-xs">

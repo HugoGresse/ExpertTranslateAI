@@ -34,6 +34,7 @@ export async function condenseSource(
   const { text: condensed, usage } = await callRole(
     {
       lang: '*',
+      targetKey: '*',
       stage: 'context',
       role: 'helper',
       model,

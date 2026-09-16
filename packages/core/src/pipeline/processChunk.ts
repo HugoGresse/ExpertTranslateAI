@@ -69,6 +69,7 @@ export async function processChunk(
       translateChunk(
         {
           lang: setup.lang,
+          targetKey: setup.key,
           role,
           model: models[role],
           chunk,
@@ -87,6 +88,7 @@ export async function processChunk(
   )
   const common = {
     lang: setup.lang,
+    targetKey: setup.key,
     chunkIndex: chunk.index,
     sourceLang: setup.sourceLang,
     targetLabel: setup.targetLabel,

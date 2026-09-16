@@ -10,6 +10,7 @@ export async function runBrief(
   const { value } = await callRoleJson(
     {
       lang: '*',
+      targetKey: '*',
       stage: 'brief',
       role: 'helper',
       model: input.model,

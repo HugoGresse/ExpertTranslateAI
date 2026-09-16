@@ -407,12 +407,15 @@ export type ProgressEvent =
   | {
       type: 'target-started'
       lang: LanguageCode
+      targetKey: string
+      region?: string
       chunkCount: number
       placeholders: Record<string, string>
     }
   | {
       type: 'stage-started'
       lang: LanguageCode
+      targetKey: string
       stage: StageName
       role: string
       chunkIndex: number | null
@@ -420,6 +423,7 @@ export type ProgressEvent =
   | {
       type: 'token'
       lang: LanguageCode
+      targetKey: string
       stage: StageName
       role: string
       chunkIndex: number
@@ -428,21 +432,23 @@ export type ProgressEvent =
   | {
       type: 'stage-done'
       lang: LanguageCode
+      targetKey: string
       stage: StageName
       role: string
       chunkIndex: number | null
       usage: Usage
     }
-  | { type: 'target-done'; lang: LanguageCode; result: TargetResult }
+  | { type: 'target-done'; lang: LanguageCode; targetKey: string; result: TargetResult }
   | {
       type: 'escalated'
       lang: LanguageCode
+      targetKey: string
       chunkIndex: number | null
       from: Difficulty
       to: Difficulty
       reason: string
     }
-  | { type: 'target-failed'; lang: LanguageCode; error: string }
+  | { type: 'target-failed'; lang: LanguageCode; targetKey: string; error: string }
   | { type: 'job-done'; jobId: string; cost: CostSummary }
 
 export interface ModelPricing {

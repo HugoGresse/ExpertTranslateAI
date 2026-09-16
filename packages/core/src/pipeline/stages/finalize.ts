@@ -2,12 +2,18 @@ import { buildFinalizePrompt, type FinalizePromptInput } from '../../prompts/fin
 import { callRole, type StageContext } from '../call.ts'
 
 export async function finalizeChunk(
-  input: FinalizePromptInput & { lang: string; model: string; chunkIndex: number },
+  input: FinalizePromptInput & {
+    lang: string
+    targetKey: string
+    model: string
+    chunkIndex: number
+  },
   ctx: StageContext,
 ): Promise<string> {
   const { text } = await callRole(
     {
       lang: input.lang,
+      targetKey: input.targetKey,
       stage: 'finalize',
       role: 'finalizer',
       model: input.model,

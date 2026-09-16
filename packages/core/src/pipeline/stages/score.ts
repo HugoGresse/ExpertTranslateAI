@@ -7,6 +7,7 @@ import { callRoleJson, type StageContext } from '../call.ts'
 export async function scoreTarget(
   input: ScorePromptInput & {
     lang: string
+    targetKey: string
     model: string
     candidates: Candidate[]
     unresolved: Issue[]
@@ -16,6 +17,7 @@ export async function scoreTarget(
   const { value } = await callRoleJson(
     {
       lang: input.lang,
+      targetKey: input.targetKey,
       stage: 'score',
       role: 'scorer',
       model: input.model,

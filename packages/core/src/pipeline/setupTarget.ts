@@ -28,6 +28,7 @@ import type {
 } from '../types.ts'
 import { AUTO_LANG } from '../types.ts'
 import type { StageContext } from './call.ts'
+import { targetKey } from './targetKey.ts'
 
 export interface JobMaterials {
   sources: ContextSource[]
@@ -42,6 +43,7 @@ export interface JobMaterials {
 
 export interface TargetSetup {
   lang: string
+  key: string
   target: Target
   targetLabel: string
   sourceLang: string
@@ -64,6 +66,16 @@ export const resolveSourceLang = (job: TranslationJob, brief: Brief | null): str
 const sourceLabel = (job: TranslationJob, brief: Brief | null): string =>
   resolveSourceLang(job, brief) ?? 'the source language (detect it yourself)'
 
+function truncateGuidelinesBlock(
+  block: string,
+  budget: number,
+): { text: string; truncated: boolean } {
+  if (!block) return { text: '', truncated: false }
+  const inner = block.replace(/^<GUIDELINES>\n?/, '').replace(/\n?<\/GUIDELINES>$/, '')
+  const fitted = truncateToTokens(inner, Math.max(1, budget - 8))
+  return { text: `<GUIDELINES>\n${fitted.text}\n</GUIDELINES>`, truncated: fitted.truncated }
+}
+
 export const targetLabelOf = (t: Target): string =>
   t.region ? `${t.lang} as spoken in ${t.region}` : t.lang
 
@@ -78,7 +90,7 @@ export function setupTarget(
   const sources = activeContextSources(materials.sources, target.lang)
   const context = buildContextBlock(sources, job.options.contextTokenBudget, ctx.logger)
   const sets = activeGuidelineSets(materials.guidelineSets, target.lang)
-  const guidelines = truncateToTokens(
+  const guidelines = truncateGuidelinesBlock(
     formatGuidelinesBlock(sets),
     job.options.guidelinesTokenBudget,
   )
@@ -108,6 +120,7 @@ export function setupTarget(
   })
   return {
     lang: target.lang,
+    key: targetKey(target),
     target,
     targetLabel: targetLabelOf(target),
     sourceLang: sourceLabel(job, materials.brief),

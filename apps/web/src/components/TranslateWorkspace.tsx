@@ -120,6 +120,7 @@ export const TranslateWorkspace: FC = () => {
   const { models, loading } = useModels()
   const controller = useRef<AbortController | null>(null)
   const [estimate, setEstimate] = useState<JobEstimate | null>(null)
+  const [dragging, setDragging] = useState(false)
   const selection = useMemo<Selection>(
     () => ({
       contextSourceIds: selectedContextIds.filter((id) =>
@@ -198,6 +199,16 @@ export const TranslateWorkspace: FC = () => {
 
   const cancel = (): void => controller.current?.abort()
 
+  const loadSourceFile = async (file: File): Promise<void> => {
+    try {
+      const text = await file.text()
+      $sourceDraft.set(text)
+      logger.info('source.fileLoaded', { name: file.name, chars: text.length })
+    } catch (error) {
+      logger.error('source.fileFailed', { name: file.name, error: String(error) })
+    }
+  }
+
   const busy = run.status === 'running'
   const canRun = Boolean(apiKey) && !busy && source.trim().length > 0 && targets.length > 0
 
@@ -207,11 +218,34 @@ export const TranslateWorkspace: FC = () => {
         {!apiKey ? <KeyGate /> : null}
         <Card title="Source">
           <textarea
-            className="min-h-64 w-full rounded-md border border-neutral-300 p-2 text-sm"
-            placeholder="Paste text or Markdown to translate…"
+            className={`min-h-64 w-full rounded-md border p-2 text-sm ${dragging ? 'border-accent bg-blue-50' : 'border-neutral-300'}`}
+            placeholder="Paste text or Markdown to translate… or drop a .txt / .md file"
             value={source}
             onChange={(e) => $sourceDraft.set(e.target.value)}
+            onDragOver={(e) => {
+              e.preventDefault()
+              setDragging(true)
+            }}
+            onDragLeave={() => setDragging(false)}
+            onDrop={(e) => {
+              e.preventDefault()
+              setDragging(false)
+              const file = e.dataTransfer.files[0]
+              if (file) void loadSourceFile(file)
+            }}
           />
+          <label className="mt-1 inline-block cursor-pointer text-xs text-accent underline">
+            Load a file
+            <input
+              type="file"
+              accept=".txt,.md,.markdown,text/plain,text/markdown"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0]
+                if (file) void loadSourceFile(file)
+              }}
+            />
+          </label>
           <div className="mt-2 grid gap-3 sm:grid-cols-2">
             <Field label="Source language">
               <select
