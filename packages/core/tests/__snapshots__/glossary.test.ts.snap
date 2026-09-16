@@ -1,0 +1,9 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`resolveGlossary > formats a glossary block 1`] = `
+"<GLOSSARY>
+"dashboard" → never render as "tableau de bord"
+"Hyperfluid" → do not translate, keep exactly as is
+"workflow" → "workflow"
+</GLOSSARY>"
+`;

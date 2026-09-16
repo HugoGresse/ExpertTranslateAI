@@ -3,6 +3,8 @@ import type { Brief, Candidate, GuidelineViolation, Issue, TranslatorRole } from
 export interface PromptMaterials {
   contextBlock?: string
   guidelinesBlock?: string
+  glossaryBlock?: string
+  memoryBlock?: string
   brief?: Brief | null
 }
 
@@ -25,12 +27,16 @@ export function materialBlocks(m: PromptMaterials): {
   brief?: string
   context?: string
   guidelines?: string
+  glossary?: string
+  memory?: string
 } {
   const brief = formatBriefBlock(m.brief)
   return {
     ...(brief ? { brief } : {}),
     ...(m.contextBlock ? { context: m.contextBlock } : {}),
     ...(m.guidelinesBlock ? { guidelines: m.guidelinesBlock } : {}),
+    ...(m.glossaryBlock ? { glossary: m.glossaryBlock } : {}),
+    ...(m.memoryBlock ? { memory: m.memoryBlock } : {}),
   }
 }
 

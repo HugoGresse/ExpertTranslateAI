@@ -1,5 +1,6 @@
 import type {
   ContextSource,
+  GlossaryScope,
   GuidelineSet,
   JobEstimate,
   Target,
@@ -17,10 +18,12 @@ import { useRepo } from '../hooks/useRepo'
 import { $run, applyProgress, idleRun } from '../stores/run'
 import {
   $selectedContextIds,
+  $selectedGlossaryIds,
   $selectedGuidelineIds,
   $settings,
   $sourceDraft,
   $targets,
+  $useMemory,
   numberSetting,
   roleModels,
   type Settings,
@@ -37,6 +40,8 @@ import { Button, Card, Field, formatUsd, inputClass } from './ui'
 interface Selection {
   contextSourceIds: string[]
   guidelineSetIds: string[]
+  glossaryScopeIds: string[]
+  useMemory: boolean
 }
 
 const buildJob = (
@@ -63,6 +68,8 @@ const buildJob = (
       guidelinesTokenBudget: numberSetting(s.guidelinesTokenBudget, 1500),
       budgetUsd: s.budgetUsd.trim() ? numberSetting(s.budgetUsd, 0) || null : null,
       reasoningEffort: s.reasoningEffort,
+      glossaryScopeIds: selection.glossaryScopeIds,
+      useMemory: selection.useMemory,
       formality: s.formality,
       ...(s.tone ? { tone: s.tone } : {}),
       ...(s.audience ? { audience: s.audience } : {}),
@@ -79,6 +86,9 @@ export const TranslateWorkspace: FC = () => {
   const run = useStore($run)
   const selectedContextIds = useStore($selectedContextIds)
   const selectedGuidelineIds = useStore($selectedGuidelineIds)
+  const selectedGlossaryIds = useStore($selectedGlossaryIds)
+  const useMemory = useStore($useMemory) === 'true'
+  const glossaryScopes = useRepo<GlossaryScope>(storage.glossaryScopes)
   const contexts = useRepo<ContextSource>(storage.contexts)
   const guidelines = useRepo<GuidelineSet>(storage.guidelines)
   const { models, loading } = useModels()
@@ -92,8 +102,20 @@ export const TranslateWorkspace: FC = () => {
       guidelineSetIds: selectedGuidelineIds.filter((id) =>
         guidelines.items.some((g) => g.id === id && g.enabled),
       ),
+      glossaryScopeIds: selectedGlossaryIds.filter((id) =>
+        glossaryScopes.items.some((g) => g.id === id),
+      ),
+      useMemory,
     }),
-    [selectedContextIds, selectedGuidelineIds, contexts.items, guidelines.items],
+    [
+      selectedContextIds,
+      selectedGuidelineIds,
+      selectedGlossaryIds,
+      useMemory,
+      contexts.items,
+      guidelines.items,
+      glossaryScopes.items,
+    ],
   )
 
   const engineFactory = useMemo(
@@ -242,6 +264,25 @@ export const TranslateWorkspace: FC = () => {
             onToggle={(id) => $selectedContextIds.set(toggleId(selectedContextIds, id))}
           />
           <MaterialChips
+            label="Glossary scopes"
+            emptyHint="No glossary scope. Create one on the Glossary page."
+            items={glossaryScopes.items.map((g) => ({
+              id: g.id,
+              name: `${g.name} (${g.level})`,
+              lang: g.lang,
+            }))}
+            selected={selectedGlossaryIds}
+            onToggle={(id) => $selectedGlossaryIds.set(toggleId(selectedGlossaryIds, id))}
+          />
+          <label className="mb-3 flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={useMemory}
+              onChange={(e) => $useMemory.set(e.target.checked ? 'true' : 'false')}
+            />
+            Use translation memory
+          </label>
+          <MaterialChips
             label="Guidelines"
             emptyHint="No guideline sets. Create one on the Guidelines page."
             items={guidelines.items
@@ -291,7 +332,7 @@ export const TranslateWorkspace: FC = () => {
           <p className="mb-2 text-sm text-amber-700">Cancelled.</p>
         ) : null}
         {run.brief ? <BriefCard brief={run.brief} /> : null}
-        <ResultPanel targets={run.targets} />
+        <ResultPanel targets={run.targets} sourceText={source} sourceLang={settings.sourceLang} />
         {run.cost ? (
           <p className="mt-3 text-xs text-neutral-600">
             Total: {run.cost.calls} calls · {run.cost.tokensIn} in / {run.cost.tokensOut} out ·{' '}

@@ -76,10 +76,18 @@ export function createEngine(ports: EnginePorts): Engine {
       }
 
       const prepare = async (): Promise<{ materials: JobMaterials; plan: Plan }> => {
-        const [rawSources, guidelineSets] = await Promise.all([
-          loadByIds(ports.storage.contexts, job.options.contextSourceIds),
-          loadByIds(ports.storage.guidelines, job.options.guidelineSetIds),
-        ])
+        const [rawSources, guidelineSets, glossaryScopes, glossaryEntries, memory] =
+          await Promise.all([
+            loadByIds(ports.storage.contexts, job.options.contextSourceIds),
+            loadByIds(ports.storage.guidelines, job.options.guidelineSetIds),
+            job.options.glossaryScopeIds.length > 0
+              ? ports.storage.glossaryScopes.list()
+              : Promise.resolve([]),
+            job.options.glossaryScopeIds.length > 0
+              ? ports.storage.glossaryEntries.list()
+              : Promise.resolve([]),
+            job.options.useMemory ? ports.storage.tm.list() : Promise.resolve([]),
+          ])
         const { sources } = await ensureDigests(
           rawSources.filter((s) => isRelevantSource(s, job)),
           {
@@ -111,7 +119,18 @@ export function createEngine(ports: EnginePorts): Engine {
           review: plan.review,
           judge: plan.judge,
         })
-        return { materials: { sources, guidelineSets, brief, trace }, plan }
+        return {
+          materials: {
+            sources,
+            guidelineSets,
+            glossaryScopes,
+            glossaryEntries,
+            memory,
+            brief,
+            trace,
+          },
+          plan,
+        }
       }
 
       const targetTraces: TraceEvent[][] = []

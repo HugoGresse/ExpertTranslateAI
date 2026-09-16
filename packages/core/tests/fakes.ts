@@ -3,9 +3,12 @@ import type {
   ChatChunk,
   ChatRequest,
   ContextSource,
+  GlossaryEntry,
+  GlossaryScope,
   GuidelineSet,
   ModelInfo,
   TargetResult,
+  TmEntry,
   TranslationJob,
   Usage,
 } from '../src/types.ts'
@@ -72,6 +75,9 @@ export const createMemoryStorage = (): StoragePort => ({
   results: memoryResults(),
   contexts: memoryRepo<ContextSource>(),
   guidelines: memoryRepo<GuidelineSet>(),
+  glossaryScopes: memoryRepo<GlossaryScope>(),
+  glossaryEntries: memoryRepo<GlossaryEntry>(),
+  tm: memoryRepo<TmEntry>(),
 })
 
 export const sampleJob = (overrides: Partial<TranslationJob> = {}): TranslationJob => ({
@@ -101,6 +107,8 @@ export const sampleJob = (overrides: Partial<TranslationJob> = {}): TranslationJ
     guidelinesTokenBudget: 1500,
     budgetUsd: null,
     reasoningEffort: 'low',
+    glossaryScopeIds: [],
+    useMemory: false,
   },
   status: 'queued',
   ...overrides,

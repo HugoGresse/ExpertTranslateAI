@@ -1,4 +1,7 @@
 import { activeContextSources, buildContextBlock, truncateToTokens } from '../context/prepare.ts'
+import { checkTerminology } from '../glossary/check.ts'
+import { formatGlossaryBlock } from '../glossary/format.ts'
+import { resolveGlossary } from '../glossary/resolve.ts'
 import { checkGuidelines } from '../guidelines/check.ts'
 import {
   activeGuidelineSets,
@@ -14,19 +17,25 @@ import {
   protectPlaceholders,
   restorePlaceholders,
 } from '../text/placeholders.ts'
+import { formatMemoryBlock, matchMemory } from '../tm/match.ts'
 import type {
   Brief,
   Candidate,
   Chunk,
   ContextSource,
   CostSummary,
+  GlossaryEntry,
+  GlossaryScope,
   GuidelineSet,
   GuidelineViolation,
   Issue,
   Judgment,
+  MemoryHit,
   Review,
   Target,
   TargetResult,
+  TermViolation,
+  TmEntry,
   TraceEvent,
   TranslationJob,
   TranslatorRole,
@@ -44,6 +53,9 @@ import { translateChunk } from './stages/translate.ts'
 export interface JobMaterials {
   sources: ContextSource[]
   guidelineSets: GuidelineSet[]
+  glossaryScopes: GlossaryScope[]
+  glossaryEntries: GlossaryEntry[]
+  memory: TmEntry[]
   brief: Brief | null
   trace: TraceEvent[]
 }
@@ -56,6 +68,8 @@ interface TargetSetup {
   materials: PromptMaterials
   sets: GuidelineSet[]
   rules: NumberedRule[]
+  glossary: GlossaryEntry[]
+  memoryHits: MemoryHit[]
   protectedText: string
   chunks: Chunk[]
 }
@@ -92,12 +106,28 @@ function setupTarget(
     job.options.guidelinesTokenBudget,
   )
   if (guidelines.truncated) ctx.logger.warn('guidelines.truncated', { lang: target.lang })
+  const glossary = resolveGlossary(
+    materials.glossaryScopes,
+    materials.glossaryEntries,
+    job.options.glossaryScopeIds,
+    target.lang,
+  )
+  const memorySourceLang =
+    job.sourceLang !== AUTO_LANG ? job.sourceLang : (materials.brief?.detectedLang ?? null)
+  const memory = job.options.useMemory
+    ? matchMemory(job.sourceText, materials.memory, memorySourceLang, target.lang)
+    : { exact: [], fuzzy: [] }
+  const glossaryBlock = formatGlossaryBlock(glossary)
+  const memoryBlock = formatMemoryBlock(memory)
   ctx.logger.info('target.start', {
     lang: target.lang,
     chunks: chunks.length,
     contextSources: sources.length,
     contextTokens: context.tokens,
     guidelineSets: sets.length,
+    glossaryEntries: glossary.length,
+    memoryExact: memory.exact.length,
+    memoryFuzzy: memory.fuzzy.length,
   })
   return {
     lang: target.lang,
@@ -108,9 +138,13 @@ function setupTarget(
       brief: materials.brief,
       ...(context.block ? { contextBlock: context.block } : {}),
       ...(guidelines.text ? { guidelinesBlock: guidelines.text } : {}),
+      ...(glossaryBlock ? { glossaryBlock } : {}),
+      ...(memoryBlock ? { memoryBlock } : {}),
     },
     sets,
     rules: numberRules(sets),
+    glossary,
+    memoryHits: [...memory.exact, ...memory.fuzzy],
     protectedText: protectedSource.text,
     chunks,
   }
@@ -184,8 +218,15 @@ async function processChunk(
       : Promise.resolve([]),
   ])
   const issues: Issue[] = review?.issues ?? []
+  const termViolations = candidates.flatMap((c) =>
+    checkTerminology(chunk.text, c.text, setup.glossary).map((v) => termAsGuideline(v, c.role)),
+  )
+  const allViolations = [...violations, ...termViolations]
   const judgment = plan.judge
-    ? await judgeChunk({ ...common, model: job.models.judge, issues, violations }, ctx)
+    ? await judgeChunk(
+        { ...common, model: job.models.judge, issues, violations: allViolations },
+        ctx,
+      )
     : null
   const base = pickBase(candidates, review, judgment)
   const finalText = plan.finalize
@@ -195,7 +236,7 @@ async function processChunk(
           model: job.models.finalizer,
           base,
           issues,
-          violations,
+          violations: allViolations,
           suggestions: review?.suggestions ?? [],
           judgment,
           preserveFormatting: job.options.preserveFormatting,
@@ -236,6 +277,12 @@ export async function runTarget(
   const finalText = restorePlaceholders(joined, protectedSource.placeholders)
 
   const regexReport = checkGuidelines(finalText, setup.sets, job.sourceText)
+  const terminologyReport = checkTerminology(job.sourceText, finalText, setup.glossary)
+  if (terminologyReport.length > 0)
+    ctx.logger.warn('target.terminologyViolations', {
+      lang: target.lang,
+      count: terminologyReport.length,
+    })
   const unresolved: Issue[] = reviews
     .flatMap((r) => r.issues)
     .filter((i) => i.severity === 'critical' && !plan.finalize)
@@ -250,7 +297,11 @@ export async function runTarget(
           finalText,
           materials: setup.materials,
           candidates,
-          unresolved: [...unresolved, ...regexReport.map(violationAsIssue)],
+          unresolved: [
+            ...unresolved,
+            ...regexReport.map(violationAsIssue),
+            ...terminologyReport.map((v) => violationAsIssue(termAsGuideline(v, 'translatorA'))),
+          ],
         },
         ctx,
       ).catch((error: unknown) => degrade(error, 'score', target.lang, ctx, null))
@@ -272,6 +323,8 @@ export async function runTarget(
     judgments,
     score,
     guidelineReport: regexReport,
+    terminologyReport,
+    memoryHits: setup.memoryHits,
     cost,
     trace: [...materials.trace, ...ctx.trace],
     status: 'done',
@@ -293,6 +346,14 @@ function degrade<T>(
   })
   return fallback
 }
+
+const termAsGuideline = (v: TermViolation, _role: TranslatorRole): GuidelineViolation => ({
+  ruleId: `glossary:${v.entryId}`,
+  ruleText: `Glossary: "${v.source}" → ${v.expected}`,
+  severity: v.severity,
+  explanation: v.explanation,
+  ...(v.found ? { targetSpan: v.found } : {}),
+})
 
 const violationAsIssue = (v: GuidelineViolation): Issue => ({
   candidate: 'translatorA',

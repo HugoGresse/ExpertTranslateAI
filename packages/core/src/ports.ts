@@ -2,11 +2,14 @@ import type {
   ChatChunk,
   ChatRequest,
   ContextSource,
+  GlossaryEntry,
+  GlossaryScope,
   GuidelineSet,
   KeyInfo,
   ModelInfo,
   ProgressEvent,
   TargetResult,
+  TmEntry,
   TranslationJob,
 } from './types.ts'
 
@@ -35,6 +38,9 @@ export interface StoragePort {
   results: ResultRepo
   contexts: Repo<ContextSource>
   guidelines: Repo<GuidelineSet>
+  glossaryScopes: Repo<GlossaryScope>
+  glossaryEntries: Repo<GlossaryEntry>
+  tm: Repo<TmEntry>
 }
 
 export interface FetchPort {

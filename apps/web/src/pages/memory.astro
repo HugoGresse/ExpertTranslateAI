@@ -1,0 +1,8 @@
+---
+import { MemoryManager } from '../components/MemoryManager'
+import Base from '../layouts/Base.astro'
+---
+
+<Base title="Memory">
+  <MemoryManager client:only="react" />
+</Base>

@@ -1,10 +1,13 @@
 import type {
   ContextSource,
+  GlossaryEntry,
+  GlossaryScope,
   GuidelineSet,
   ModelInfo,
   Repo,
   StoragePort,
   TargetResult,
+  TmEntry,
   TranslationJob,
 } from '@experttranslate/core'
 import Dexie, { type EntityTable } from 'dexie'
@@ -21,6 +24,9 @@ export class EtaDatabase extends Dexie {
   modelCache!: EntityTable<ModelCache, 'id'>
   contextSources!: EntityTable<ContextSource, 'id'>
   guidelineSets!: EntityTable<GuidelineSet, 'id'>
+  glossaryScopes!: EntityTable<GlossaryScope, 'id'>
+  glossaryEntries!: EntityTable<GlossaryEntry, 'id'>
+  tm!: EntityTable<TmEntry, 'id'>
 
   constructor() {
     super('experttranslateai')
@@ -32,6 +38,11 @@ export class EtaDatabase extends Dexie {
     this.version(2).stores({
       contextSources: 'id, createdAt, enabled',
       guidelineSets: 'id, createdAt, enabled',
+    })
+    this.version(3).stores({
+      glossaryScopes: 'id, createdAt, parentId, level',
+      glossaryEntries: 'id, createdAt, scopeId, lang',
+      tm: 'id, createdAt, sourceLang, targetLang',
     })
   }
 }
@@ -84,6 +95,9 @@ export function createDexieStorage(database: EtaDatabase = db): StoragePort {
     },
     contexts: tableRepo<ContextSource>(database.contextSources),
     guidelines: tableRepo<GuidelineSet>(database.guidelineSets),
+    glossaryScopes: tableRepo<GlossaryScope>(database.glossaryScopes),
+    glossaryEntries: tableRepo<GlossaryEntry>(database.glossaryEntries),
+    tm: tableRepo<TmEntry>(database.tm),
   }
 }
 

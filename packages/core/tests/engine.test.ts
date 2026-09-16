@@ -250,3 +250,44 @@ describe('engine.run with two targets sharing a language', () => {
     expect(end?.type === 'job-done' ? end.cost.calls : 0).toBe(2)
   })
 })
+
+describe('engine.run with glossary and memory', () => {
+  it('injects glossary and memory blocks and reports terminology violations', async () => {
+    const llm = createFakeLlm(() => 'Ouvre le processus.')
+    const storage = createMemoryStorage()
+    await storage.glossaryScopes.put({ id: 'g', level: 'global', name: 'Global', createdAt: 0 })
+    await storage.glossaryEntries.put({
+      id: 'e1',
+      scopeId: 'g',
+      source: 'workflow',
+      target: 'flux de travail',
+      lang: 'fr',
+      kind: 'preferred',
+      caseSensitive: false,
+      createdAt: 0,
+    })
+    await storage.tm.put({
+      id: 't1',
+      sourceLang: 'en',
+      targetLang: 'fr',
+      source: 'Open the workflow.',
+      target: 'Ouvre le flux de travail.',
+      origin: 'human-correction',
+      createdAt: 0,
+    })
+    const engine = createEngine({ llm, storage, clock: { now: () => 1 }, logger: noopLogger })
+    const job = sampleJob({ targets: [{ lang: 'fr' }], sourceText: 'Open the workflow.' })
+    job.options.glossaryScopeIds = ['g']
+    job.options.useMemory = true
+    const events = await collect(engine.run(job))
+    const done = events.find((e) => e.type === 'target-done')
+    if (done?.type !== 'target-done') throw new Error('no result')
+    expect(done.result.terminologyReport.map((v) => v.entryId)).toEqual(['e1'])
+    expect(done.result.memoryHits.map((h) => h.entryId)).toEqual(['t1'])
+    const system = llm.calls[0]?.request.messages[0]?.content ?? ''
+    expect(system).toContain('<GLOSSARY>\n"workflow" → "flux de travail"')
+    expect(system).toContain(
+      'EXACT (reuse verbatim): "Open the workflow." → "Ouvre le flux de travail."',
+    )
+  })
+})

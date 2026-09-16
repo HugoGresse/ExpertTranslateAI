@@ -1,17 +1,22 @@
 import {
   type GuidelineViolation,
+  learnCorrections,
   restorePlaceholders,
   type TargetResult,
   type TraceEvent,
 } from '@experttranslate/core'
 import { type FC, useEffect, useState } from 'react'
+import { storage } from '../adapters/dexieStorage'
+import { logger } from '../adapters/logger'
 import { languageName, RTL_LANGS } from '../data/languages'
 import type { TargetProgress } from '../stores/run'
-import { CandidatesCard, ReviewCard, ScoreCard } from './ResultDetails'
+import { CandidatesCard, ReviewCard, ScoreCard, TerminologyReport } from './ResultDetails'
 import { Button, formatUsd } from './ui'
 
 export interface ResultPanelProps {
   targets: Record<string, TargetProgress>
+  sourceText: string
+  sourceLang: string
 }
 
 const download = (lang: string, text: string): void => {
@@ -85,9 +90,32 @@ const GuidelineReport: FC<{ violations: GuidelineViolation[] }> = ({ violations 
   )
 }
 
-const FinalText: FC<{ result: TargetResult }> = ({ result }) => {
+const FinalText: FC<{ result: TargetResult; sourceText: string; sourceLang: string }> = ({
+  result,
+  sourceText,
+  sourceLang,
+}) => {
   const [text, setText] = useState(result.finalText)
+  const [saved, setSaved] = useState<string | null>(null)
   useEffect(() => setText(result.finalText), [result.finalText])
+  const saveCorrection = async (): Promise<void> => {
+    const entries = learnCorrections({
+      sourceText,
+      originalText: result.finalText,
+      editedText: text,
+      sourceLang: sourceLang === 'auto' ? (result.brief?.detectedLang ?? 'auto') : sourceLang,
+      targetLang: result.lang,
+      makeId: () => crypto.randomUUID(),
+      now: Date.now(),
+    })
+    for (const e of entries) await storage.tm.put(e)
+    logger.info('memory.learned', { lang: result.lang, count: entries.length })
+    setSaved(
+      entries.length === 0
+        ? 'No changes to save.'
+        : `Saved ${entries.length} correction${entries.length > 1 ? 's' : ''} to memory.`,
+    )
+  }
   const dir = RTL_LANGS.has(result.lang) ? 'rtl' : 'ltr'
   return (
     <div>
@@ -101,6 +129,10 @@ const FinalText: FC<{ result: TargetResult }> = ({ result }) => {
       <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-neutral-600">
         <Button onClick={() => void navigator.clipboard.writeText(text)}>Copy</Button>
         <Button onClick={() => download(result.lang, text)}>Download</Button>
+        <Button disabled={text === result.finalText} onClick={() => void saveCorrection()}>
+          Save as correction
+        </Button>
+        {saved ? <span>{saved}</span> : null}
         <span>
           {result.chunks.length} chunk{result.chunks.length > 1 ? 's' : ''} · {result.cost.tokensIn}{' '}
           in / {result.cost.tokensOut} out · {formatUsd(result.cost.usd)}
@@ -114,6 +146,7 @@ const FinalText: FC<{ result: TargetResult }> = ({ result }) => {
       </p>
       {result.score ? <ScoreCard score={result.score} /> : null}
       <GuidelineReport violations={result.guidelineReport} />
+      <TerminologyReport violations={result.terminologyReport} hits={result.memoryHits} />
       {result.reviews.length > 0 ? <ReviewCard reviews={result.reviews} /> : null}
       {result.candidates.length > 1 ? <CandidatesCard result={result} /> : null}
       <TraceDrawer trace={result.trace} />
@@ -121,7 +154,7 @@ const FinalText: FC<{ result: TargetResult }> = ({ result }) => {
   )
 }
 
-export const ResultPanel: FC<ResultPanelProps> = ({ targets }) => {
+export const ResultPanel: FC<ResultPanelProps> = ({ targets, sourceText, sourceLang }) => {
   const langs = Object.keys(targets)
   const [active, setActive] = useState(langs[0] ?? '')
   useEffect(() => {
@@ -169,7 +202,9 @@ export const ResultPanel: FC<ResultPanelProps> = ({ targets }) => {
             </pre>
           </div>
         ) : null}
-        {current.result ? <FinalText result={current.result} /> : null}
+        {current.result ? (
+          <FinalText result={current.result} sourceText={sourceText} sourceLang={sourceLang} />
+        ) : null}
       </div>
     </div>
   )

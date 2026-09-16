@@ -1,9 +1,11 @@
 import {
   type Brief,
+  type MemoryHit,
   type QualityScore,
   type Review,
   restorePlaceholders,
   type TargetResult,
+  type TermViolation,
 } from '@experttranslate/core'
 import { type FC, useState } from 'react'
 import { Button } from './ui'
@@ -175,3 +177,30 @@ export const CandidatesCard: FC<{ result: TargetResult }> = ({ result }) => {
     </div>
   )
 }
+
+export const TerminologyReport: FC<{ violations: TermViolation[]; hits: MemoryHit[] }> = ({
+  violations,
+  hits,
+}) => (
+  <div className="mt-2 text-xs">
+    {hits.length > 0 ? (
+      <p className="text-neutral-600">
+        Memory: {hits.filter((h) => h.similarity === 1).length} exact,{' '}
+        {hits.filter((h) => h.similarity < 1).length} similar sentence{hits.length > 1 ? 's' : ''}{' '}
+        reused.
+      </p>
+    ) : null}
+    {violations.length === 0 ? null : (
+      <div className="mt-1 rounded-md border border-amber-300 bg-amber-50 p-2">
+        <p className="font-medium">
+          Glossary: {violations.length} violation{violations.length > 1 ? 's' : ''}
+        </p>
+        <ul className="mt-1 list-disc pl-4">
+          {violations.map((v) => (
+            <li key={`${v.entryId}-${v.found ?? ''}`}>{v.explanation}</li>
+          ))}
+        </ul>
+      </div>
+    )}
+  </div>
+)

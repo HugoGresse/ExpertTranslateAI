@@ -83,6 +83,12 @@ export const $selectedGuidelineIds = persistentAtom<string[]>(
   [],
   idListCodec,
 )
+export const $selectedGlossaryIds = persistentAtom<string[]>(
+  'eta.selectedGlossaries',
+  [],
+  idListCodec,
+)
+export const $useMemory = persistentAtom<string>('eta.useMemory', 'true')
 
 export function roleModels(s: Settings): RoleModels {
   const a = s.translatorModel

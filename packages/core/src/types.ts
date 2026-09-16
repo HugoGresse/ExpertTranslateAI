@@ -23,6 +23,68 @@ export interface JobOptions {
   guidelinesTokenBudget: number
   budgetUsd: number | null
   reasoningEffort: ReasoningEffort
+  glossaryScopeIds: string[]
+  useMemory: boolean
+}
+
+export type GlossaryLevel = 'global' | 'language' | 'client' | 'project' | 'document'
+
+export const GLOSSARY_LEVELS: GlossaryLevel[] = [
+  'global',
+  'language',
+  'client',
+  'project',
+  'document',
+]
+
+export interface GlossaryScope {
+  id: string
+  level: GlossaryLevel
+  name: string
+  lang?: LanguageCode
+  parentId?: string
+  createdAt: number
+}
+
+export type GlossaryKind = 'preferred' | 'forbidden' | 'doNotTranslate'
+
+export interface GlossaryEntry {
+  id: string
+  scopeId: string
+  source: string
+  target: string
+  lang: LanguageCode
+  kind: GlossaryKind
+  caseSensitive: boolean
+  note?: string
+  createdAt: number
+}
+
+export interface TermViolation {
+  entryId: string
+  kind: GlossaryKind
+  source: string
+  expected: string
+  found?: string
+  severity: 'major'
+  explanation: string
+}
+
+export interface TmEntry {
+  id: string
+  sourceLang: LanguageCode
+  targetLang: LanguageCode
+  source: string
+  target: string
+  origin: 'human-correction' | 'accepted-output'
+  createdAt: number
+}
+
+export interface MemoryHit {
+  source: string
+  target: string
+  similarity: number
+  entryId: string
 }
 
 export interface Brief {
@@ -232,6 +294,8 @@ export interface TargetResult {
   judgments: Judgment[]
   score: QualityScore | null
   guidelineReport: GuidelineViolation[]
+  terminologyReport: TermViolation[]
+  memoryHits: MemoryHit[]
   cost: CostSummary
   trace: TraceEvent[]
   status: 'done' | 'failed' | 'cancelled'
