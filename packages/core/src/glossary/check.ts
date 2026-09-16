@@ -14,7 +14,7 @@ function regexes(entry: GlossaryEntry): { source: RegExp | null; target: RegExp 
   return made
 }
 
-const has = (text: string, re: RegExp | null): boolean => re !== null && re.test(text)
+const has = (text: string, re: RegExp | null): boolean => re?.test(text) ?? false
 
 export const termRe = wholeTermRe
 
