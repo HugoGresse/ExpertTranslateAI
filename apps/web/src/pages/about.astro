@@ -1,0 +1,33 @@
+---
+import Base from '../layouts/Base.astro'
+---
+
+<Base title="About">
+  <article class="prose max-w-3xl">
+    <h1 class="text-2xl font-semibold">How it works</h1>
+    <p class="mt-3">
+      ExpertTranslateAI runs entirely in your browser. Your text is sent straight to
+      <a href="https://openrouter.ai" class="text-accent">
+        OpenRouter
+      </a>{' '}
+      with an API key that you own and that is stored only on this device. There is no server in
+      between.
+    </p>
+    <h2 class="mt-6 text-xl font-semibold">Pipeline</h2>
+    <p class="mt-2">
+      Long texts are split into balanced chunks. Each chunk is translated with the whole document as
+      context so terminology stays consistent. Code, URLs and placeholders are protected before
+      translation and restored after. Later versions add multi-model translation, review, judging,
+      glossaries and translation memory.
+    </p>
+    <h2 class="mt-6 text-xl font-semibold">Privacy and your key</h2>
+    <ul class="mt-2 list-disc pl-5">
+      <li>
+        The key is kept in this browser's local storage. Anyone with access to this browser profile
+        can use it.
+      </li>
+      <li>Set a spending limit on the key in your OpenRouter dashboard.</li>
+      <li>Use "Forget key" in Settings to remove it at any time.</li>
+    </ul>
+  </article>
+</Base>

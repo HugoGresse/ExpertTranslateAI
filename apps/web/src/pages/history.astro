@@ -1,0 +1,8 @@
+---
+import Base from '../layouts/Base.astro'
+import { HistoryList } from '../components/HistoryList'
+---
+
+<Base title="History">
+  <HistoryList client:only="react" />
+</Base>

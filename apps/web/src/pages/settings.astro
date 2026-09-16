@@ -1,0 +1,8 @@
+---
+import Base from '../layouts/Base.astro'
+import { SettingsPanel } from '../components/SettingsPanel'
+---
+
+<Base title="Settings">
+  <SettingsPanel client:only="react" />
+</Base>

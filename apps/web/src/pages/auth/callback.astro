@@ -1,0 +1,8 @@
+---
+import Base from '../../layouts/Base.astro'
+import { AuthCallback } from '../../components/AuthCallback'
+---
+
+<Base title="Connecting">
+  <AuthCallback client:only="react" />
+</Base>
