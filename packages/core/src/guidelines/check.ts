@@ -1,3 +1,4 @@
+import { wholeTermRe } from '../text/terms.ts'
 import type { GuidelineRule, GuidelineSet, GuidelineViolation } from '../types.ts'
 
 export function compileRulePattern(rule: GuidelineRule): RegExp | null {
@@ -38,11 +39,6 @@ export function checkRule(
   return null
 }
 
-const escapeRe = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-
-const exactTermRe = (term: string): RegExp =>
-  new RegExp(`(?<![\\p{L}\\p{N}])${escapeRe(term)}(?![\\p{L}\\p{N}])`, 'u')
-
 function checkKeep(
   text: string,
   rule: GuidelineRule,
@@ -53,7 +49,7 @@ function checkKeep(
   const global = new RegExp(re.source, re.flags.includes('g') ? re.flags : `${re.flags}g`)
   const wanted = [...source.matchAll(global)].map((m) => m[0])
   if (wanted.length === 0) return null
-  const first = wanted.find((term) => !exactTermRe(term).test(text))
+  const first = wanted.find((term) => !wholeTermRe(term, true).test(text))
   if (first === undefined) return null
   return {
     ruleId: rule.id,

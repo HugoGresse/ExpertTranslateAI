@@ -1,12 +1,5 @@
 import { expect, test } from '@playwright/test'
-
-const sse = (text: string): string =>
-  [
-    `data: ${JSON.stringify({ choices: [{ delta: { content: text } }] })}`,
-    `data: ${JSON.stringify({ choices: [{ delta: {} }], usage: { prompt_tokens: 20, completion_tokens: 4, cost: 0.0001 } })}`,
-    'data: [DONE]',
-    '',
-  ].join('\n\n')
+import { sse } from './helpers'
 
 test('glossary scope and memory reach the prompt, violations are reported, corrections are learned', async ({
   page,

@@ -1,12 +1,5 @@
 import { expect, test } from '@playwright/test'
-
-const sse = (text: string): string =>
-  [
-    `data: ${JSON.stringify({ choices: [{ delta: { content: text } }] })}`,
-    `data: ${JSON.stringify({ choices: [{ delta: {} }], usage: { prompt_tokens: 30, completion_tokens: 5, cost: 0.001 } })}`,
-    'data: [DONE]',
-    '',
-  ].join('\n\n')
+import { sse } from './helpers'
 
 const brief = JSON.stringify({
   detectedLang: 'en',

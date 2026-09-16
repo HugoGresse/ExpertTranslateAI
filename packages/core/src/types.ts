@@ -31,6 +31,7 @@ export interface JobOptions {
 }
 
 export interface RouterRule {
+  id?: string
   domain: Domain
   role: Role
   model: string
@@ -311,6 +312,8 @@ export interface TraceEvent {
 export interface TargetResult {
   jobId: string
   lang: LanguageCode
+  sourceText: string
+  sourceLang: LanguageCode | null
   chunks: Chunk[]
   placeholders: Record<string, string>
   candidates: Candidate[]

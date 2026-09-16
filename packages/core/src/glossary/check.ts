@@ -1,24 +1,31 @@
+import { wholeTermRe } from '../text/terms.ts'
 import type { GlossaryEntry, TermViolation } from '../types.ts'
 
-const escapeRe = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+const compiled = new WeakMap<GlossaryEntry, { source: RegExp | null; target: RegExp | null }>()
 
-export const termRe = (term: string, caseSensitive: boolean): RegExp =>
-  new RegExp(
-    `(?<![\\p{L}\\p{N}])${escapeRe(term.trim())}(?![\\p{L}\\p{N}])`,
-    caseSensitive ? 'u' : 'iu',
-  )
+function regexes(entry: GlossaryEntry): { source: RegExp | null; target: RegExp | null } {
+  const cached = compiled.get(entry)
+  if (cached) return cached
+  const made = {
+    source: entry.source.trim() ? wholeTermRe(entry.source, entry.caseSensitive) : null,
+    target: entry.target.trim() ? wholeTermRe(entry.target, entry.caseSensitive) : null,
+  }
+  compiled.set(entry, made)
+  return made
+}
 
-const has = (text: string, term: string, caseSensitive: boolean): boolean =>
-  term.trim().length > 0 && termRe(term, caseSensitive).test(text)
+const has = (text: string, re: RegExp | null): boolean => re !== null && re.test(text)
+
+export const termRe = wholeTermRe
 
 export function checkEntry(
   source: string,
   target: string,
   entry: GlossaryEntry,
 ): TermViolation | null {
-  const inSource = has(source, entry.source, entry.caseSensitive)
+  const re = regexes(entry)
   if (entry.kind === 'forbidden') {
-    if (!has(target, entry.target, entry.caseSensitive)) return null
+    if (!has(target, re.target)) return null
     return {
       entryId: entry.id,
       kind: entry.kind,
@@ -29,9 +36,9 @@ export function checkEntry(
       explanation: `Forbidden rendering "${entry.target}" used for "${entry.source}"`,
     }
   }
-  if (!inSource) return null
+  if (!has(source, re.source)) return null
   if (entry.kind === 'doNotTranslate') {
-    if (has(target, entry.source, true)) return null
+    if (has(target, wholeTermRe(entry.source, true))) return null
     return {
       entryId: entry.id,
       kind: entry.kind,
@@ -41,7 +48,7 @@ export function checkEntry(
       explanation: `"${entry.source}" must stay unchanged but does not appear verbatim in the translation`,
     }
   }
-  if (has(target, entry.target, entry.caseSensitive)) return null
+  if (re.target === null || has(target, re.target)) return null
   return {
     entryId: entry.id,
     kind: entry.kind,
@@ -64,3 +71,8 @@ export function checkTerminology(
   }
   return out
 }
+
+export const glossaryTargetTerms = (entries: GlossaryEntry[]): string[] =>
+  entries
+    .map((e) => (e.kind === 'doNotTranslate' ? e.source : e.target))
+    .filter((t) => t.trim().length > 0)

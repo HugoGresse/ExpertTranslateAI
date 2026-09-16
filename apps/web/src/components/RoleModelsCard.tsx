@@ -1,7 +1,8 @@
-import type { Domain, Role, RouterRule } from '@experttranslate/core'
-import { useStore as useAtom, useStore } from '@nanostores/react'
+import type { Domain, ModelInfo, Role, RouterRule } from '@experttranslate/core'
+import { useStore } from '@nanostores/react'
 import type { FC } from 'react'
 import { useModels } from '../hooks/useModels'
+import { pickOneOf } from '../lib/guards'
 import { $routing, $settings, type Settings } from '../stores/settings'
 import { ModelPicker } from './ModelPicker'
 import { Button, Card, Field, inputClass } from './ui'
@@ -43,6 +44,9 @@ const ROLES: Array<{ key: RoleKey; label: string; hint: string }> = [
   },
 ]
 
+const DIFFICULTIES = ['auto', 'simple', 'normal', 'hard'] as const
+const EFFORTS = ['none', 'minimal', 'low', 'medium', 'high'] as const
+
 export const RoleModelsCard: FC = () => {
   const settings = useStore($settings)
   const { models, loading, refresh } = useModels()
@@ -61,7 +65,7 @@ export const RoleModelsCard: FC = () => {
             className={inputClass}
             value={settings.difficulty}
             onChange={(e) =>
-              $settings.setKey('difficulty', e.target.value as Settings['difficulty'])
+              $settings.setKey('difficulty', pickOneOf(DIFFICULTIES, e.target.value, 'auto'))
             }
           >
             <option value="auto">Auto</option>
@@ -112,7 +116,7 @@ export const RoleModelsCard: FC = () => {
             className={inputClass}
             value={settings.reasoningEffort}
             onChange={(e) =>
-              $settings.setKey('reasoningEffort', e.target.value as Settings['reasoningEffort'])
+              $settings.setKey('reasoningEffort', pickOneOf(EFFORTS, e.target.value, 'low'))
             }
           >
             <option value="none">Off</option>
@@ -163,28 +167,31 @@ const ROLE_KEYS: Role[] = [
 ]
 
 const RoutingTable: FC<{
-  models: Parameters<typeof ModelPicker>[0]['models']
+  models: ModelInfo[]
   loading: boolean
 }> = ({ models, loading }) => {
-  const rules = useAtom($routing)
+  const rules = useStore($routing)
   const update = (index: number, patch: Partial<RouterRule>): void =>
     $routing.set(rules.map((r, i) => (i === index ? { ...r, ...patch } : r)))
   return (
     <div className="mt-2">
       <p className="text-sm font-medium text-neutral-700">Routing by domain</p>
       <p className="mb-2 text-xs text-neutral-500">
-        After the brief detects the domain, these rules override the role models above.
+        After the brief detects the domain, these rules override the role models above. The helper
+        (brief, context) is only routed when the workspace domain is set explicitly.
       </p>
       <ul className="flex flex-col gap-2">
         {rules.map((rule, i) => (
           <li
-            key={`${rule.domain}-${rule.role}-${rule.model}`}
+            key={rule.id ?? `${rule.domain}-${rule.role}-${i}`}
             className="grid gap-2 text-sm md:grid-cols-[120px_130px_1fr_auto]"
           >
             <select
               className={inputClass}
               value={rule.domain}
-              onChange={(e) => update(i, { domain: e.target.value as Domain })}
+              onChange={(e) =>
+                update(i, { domain: pickOneOf(DOMAINS, e.target.value, rule.domain) })
+              }
               aria-label="Routing domain"
             >
               {DOMAINS.map((d) => (
@@ -196,7 +203,7 @@ const RoutingTable: FC<{
             <select
               className={inputClass}
               value={rule.role}
-              onChange={(e) => update(i, { role: e.target.value as Role })}
+              onChange={(e) => update(i, { role: pickOneOf(ROLE_KEYS, e.target.value, rule.role) })}
               aria-label="Routing role"
             >
               {ROLE_KEYS.map((r) => (
@@ -221,7 +228,10 @@ const RoutingTable: FC<{
       <Button
         className="mt-2"
         onClick={() =>
-          $routing.set([...rules, { domain: 'legal', role: 'translatorA', model: '' }])
+          $routing.set([
+            ...rules,
+            { id: crypto.randomUUID(), domain: 'legal', role: 'translatorA', model: '' },
+          ])
         }
       >
         Add routing rule

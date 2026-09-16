@@ -77,3 +77,24 @@ describe('checkTerminology', () => {
     expect(checkTerminology('workflows', 'processus', resolved)).toEqual([])
   })
 })
+
+describe('review fixes', () => {
+  it('keeps several forbidden renderings for one source term', () => {
+    const forbidden = [
+      entry('f1', 'g', 'workflow', 'processus', 'forbidden'),
+      entry('f2', 'g', 'workflow', 'procédé', 'forbidden'),
+    ]
+    const resolved = resolveGlossary(scopes, forbidden, ['g'], 'fr')
+    expect(resolved.map((e) => e.id).sort()).toEqual(['f1', 'f2'])
+    expect(checkTerminology('a workflow', 'un procédé', resolved).map((v) => v.entryId)).toEqual([
+      'f2',
+    ])
+  })
+
+  it('ignores preferred entries with an empty target', () => {
+    const empty = [entry('e0', 'g', 'workflow', '')]
+    expect(
+      checkTerminology('the workflow', 'le truc', resolveGlossary(scopes, empty, ['g'], 'fr')),
+    ).toEqual([])
+  })
+})

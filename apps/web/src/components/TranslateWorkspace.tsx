@@ -16,6 +16,7 @@ import { logger } from '../adapters/logger'
 import { LANGUAGES } from '../data/languages'
 import { useModels } from '../hooks/useModels'
 import { useRepo } from '../hooks/useRepo'
+import { pickOneOf } from '../lib/guards'
 import { $run, applyProgress, idleRun } from '../stores/run'
 import {
   $routing,
@@ -39,6 +40,18 @@ import { ResultPanel } from './ResultPanel'
 import { TargetPicker } from './TargetPicker'
 import { Button, Card, Field, formatUsd, inputClass } from './ui'
 
+const DOMAIN_OPTIONS = [
+  'auto',
+  'general',
+  'legal',
+  'technical',
+  'marketing',
+  'medical',
+  'literary',
+  'ui',
+] as const
+const DIFFICULTY_OPTIONS = ['auto', 'simple', 'normal', 'hard'] as const
+
 interface Selection {
   contextSourceIds: string[]
   guidelineSetIds: string[]
@@ -59,7 +72,7 @@ const buildJob = (
     sourceText: source,
     sourceLang: s.sourceLang,
     targets,
-    domain: 'auto',
+    domain: s.domain,
     difficulty: s.difficulty,
     models: roleModels(s),
     options: {
@@ -74,7 +87,7 @@ const buildJob = (
       glossaryScopeIds: selection.glossaryScopeIds,
       useMemory: selection.useMemory,
       autoEscalate: s.autoEscalate === 'true',
-      escalationConfidence: numberSetting(s.escalationConfidence, 60),
+      escalationConfidence: numberSetting(s.escalationConfidence, 60, 0),
       routing: selection.routing,
       formality: s.formality,
       ...(s.tone ? { tone: s.tone } : {}),
@@ -206,12 +219,33 @@ export const TranslateWorkspace: FC = () => {
                 ))}
               </select>
             </Field>
+            <Field
+              label="Domain"
+              hint="Auto: the brief detects it. Explicit domains route the helper too."
+            >
+              <select
+                className={inputClass}
+                value={settings.domain}
+                onChange={(e) =>
+                  $settings.setKey('domain', pickOneOf(DOMAIN_OPTIONS, e.target.value, 'auto'))
+                }
+              >
+                {DOMAIN_OPTIONS.map((d) => (
+                  <option key={d} value={d}>
+                    {d}
+                  </option>
+                ))}
+              </select>
+            </Field>
             <Field label="Difficulty" hint="Auto: the brief decides.">
               <select
                 className={inputClass}
                 value={settings.difficulty}
                 onChange={(e) =>
-                  $settings.setKey('difficulty', e.target.value as Settings['difficulty'])
+                  $settings.setKey(
+                    'difficulty',
+                    pickOneOf(DIFFICULTY_OPTIONS, e.target.value, 'auto'),
+                  )
                 }
               >
                 <option value="auto">Auto</option>
@@ -341,7 +375,7 @@ export const TranslateWorkspace: FC = () => {
           <p className="mb-2 text-sm text-amber-700">Cancelled.</p>
         ) : null}
         {run.brief ? <BriefCard brief={run.brief} /> : null}
-        <ResultPanel targets={run.targets} sourceText={source} sourceLang={settings.sourceLang} />
+        <ResultPanel targets={run.targets} />
         {run.cost ? (
           <p className="mt-3 text-xs text-neutral-600">
             Total: {run.cost.calls} calls · {run.cost.tokensIn} in / {run.cost.tokensOut} out ·{' '}

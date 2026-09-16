@@ -10,18 +10,40 @@ const trigrams = (text: string): Set<string> => {
   return out
 }
 
-export function trigramSimilarity(a: string, b: string): number {
-  const ta = trigrams(a)
-  const tb = trigrams(b)
-  if (ta.size === 0 && tb.size === 0) return 1
-  let inter = 0
-  for (const t of ta) if (tb.has(t)) inter++
-  return inter / (ta.size + tb.size - inter)
-}
+export const trigramSimilarity = (a: string, b: string): number =>
+  setSimilarity(trigrams(a), trigrams(b))
 
 export interface MemoryMatches {
   exact: MemoryHit[]
   fuzzy: MemoryHit[]
+}
+
+interface Indexed {
+  entry: TmEntry
+  norm: string
+  grams: Set<string>
+}
+
+function indexEntries(entries: TmEntry[]): {
+  byNormalized: Map<string, TmEntry>
+  indexed: Indexed[]
+} {
+  const byNormalized = new Map<string, TmEntry>()
+  const indexed: Indexed[] = []
+  for (const entry of entries) {
+    const norm = normalizeSentence(entry.source)
+    const current = byNormalized.get(norm)
+    if (!current || entry.createdAt > current.createdAt) byNormalized.set(norm, entry)
+    indexed.push({ entry, norm, grams: trigrams(norm) })
+  }
+  return { byNormalized, indexed }
+}
+
+const setSimilarity = (a: Set<string>, b: Set<string>): number => {
+  if (a.size === 0 && b.size === 0) return 1
+  let inter = 0
+  for (const t of a) if (b.has(t)) inter++
+  return inter / (a.size + b.size - inter)
 }
 
 export function matchMemory(
@@ -30,12 +52,12 @@ export function matchMemory(
   sourceLang: string | null,
   targetLang: string,
 ): MemoryMatches {
+  if (sourceLang === null) return { exact: [], fuzzy: [] }
   const candidates = entries.filter(
-    (e) => e.targetLang === targetLang && (sourceLang === null || e.sourceLang === sourceLang),
+    (e) => e.targetLang === targetLang && e.sourceLang === sourceLang,
   )
   if (candidates.length === 0) return { exact: [], fuzzy: [] }
-  const byNormalized = new Map<string, TmEntry>()
-  for (const e of candidates) byNormalized.set(normalizeSentence(e.source), e)
+  const { byNormalized, indexed } = indexEntries(candidates)
   const exact: MemoryHit[] = []
   const fuzzy: MemoryHit[] = []
   const seen = new Set<string>()
@@ -48,10 +70,17 @@ export function matchMemory(
       exact.push({ source: sentence, target: direct.target, similarity: 1, entryId: direct.id })
       continue
     }
+    const grams = trigrams(norm)
     let best: { entry: TmEntry; score: number } | null = null
-    for (const entry of candidates) {
-      const score = trigramSimilarity(norm, normalizeSentence(entry.source))
-      if (score >= FUZZY_THRESHOLD && (!best || score > best.score)) best = { entry, score }
+    for (const item of indexed) {
+      const score = setSimilarity(grams, item.grams)
+      if (
+        score >= FUZZY_THRESHOLD &&
+        (!best ||
+          score > best.score ||
+          (score === best.score && item.entry.createdAt > best.entry.createdAt))
+      )
+        best = { entry: item.entry, score }
     }
     if (best)
       fuzzy.push({

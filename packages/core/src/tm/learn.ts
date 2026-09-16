@@ -12,6 +12,7 @@ export interface LearnInput {
 }
 
 export function learnCorrections(input: LearnInput): TmEntry[] {
+  if (!input.sourceLang || input.sourceLang === 'auto' || !input.targetLang) return []
   const source = splitSentences(input.sourceText)
   const original = splitSentences(input.originalText)
   const edited = splitSentences(input.editedText)

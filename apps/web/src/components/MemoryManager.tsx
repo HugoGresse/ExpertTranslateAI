@@ -3,7 +3,8 @@ import { type FC, useMemo, useState } from 'react'
 import { storage } from '../adapters/dexieStorage'
 import { logger } from '../adapters/logger'
 import { useRepo } from '../hooks/useRepo'
-import { downloadText, parseCsv, toCsv } from '../lib/csv'
+import { parseCsv, toCsv } from '../lib/csv'
+import { downloadText } from '../lib/download'
 import { Button, Card, inputClass } from './ui'
 
 export const MemoryManager: FC = () => {
@@ -28,6 +29,14 @@ export const MemoryManager: FC = () => {
     )
 
   const importCsv = async (file: File): Promise<void> => {
+    try {
+      await importRows(file)
+    } catch (error) {
+      logger.error('memory.importFailed', { error: String(error) })
+    }
+  }
+
+  const importRows = async (file: File): Promise<void> => {
     const rows = parseCsv(await file.text())
     const body = rows[0]?.[0]?.toLowerCase() === 'sourcelang' ? rows.slice(1) : rows
     let count = 0

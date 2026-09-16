@@ -5,6 +5,7 @@ import {
   type QualityScore,
   type Review,
   restorePlaceholders,
+  roleLabel,
   type TargetResult,
   type TermViolation,
 } from '@experttranslate/core'
@@ -155,7 +156,7 @@ export const CandidatesCard: FC<{ result: TargetResult }> = ({ result }) => {
                   .map((c) => (
                     <div key={c.role} className="rounded bg-neutral-50 p-2">
                       <p className="mb-1 font-medium">
-                        {c.role.replace('translator', 'Candidate ')}{' '}
+                        {roleLabel(c.role)}{' '}
                         <span className="font-normal text-neutral-500">{c.model}</span>
                       </p>
                       <pre className="whitespace-pre-wrap">

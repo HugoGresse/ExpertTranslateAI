@@ -8,7 +8,7 @@ export {
   truncateToTokens,
 } from './context/prepare.ts'
 export { createEngine, type Engine } from './engine.ts'
-export { checkTerminology, termRe } from './glossary/check.ts'
+export { checkTerminology, glossaryTargetTerms, termRe } from './glossary/check.ts'
 export { formatGlossaryBlock } from './glossary/format.ts'
 export { expandScopeIds, resolveGlossary } from './glossary/resolve.ts'
 export { checkGuidelines, checkRule, isCheckable } from './guidelines/check.ts'
@@ -28,6 +28,7 @@ export { StreamIdleTimeoutError } from './llm/sse.ts'
 export { DIFFICULTY_ORDER, decideEscalation, nextDifficulty } from './pipeline/escalation.ts'
 export { PLANS, type Plan, planFor } from './pipeline/plan.ts'
 export { routeModels } from './pipeline/router.ts'
+export { resolveSourceLang } from './pipeline/setupTarget.ts'
 export type {
   ClockPort,
   EnginePorts,
@@ -42,6 +43,7 @@ export type {
 } from './ports.ts'
 export { noopLogger, systemClock } from './ports.ts'
 export { assembleSystem, type SystemBlocks } from './prompts/assembleSystem.ts'
+export { roleLabel } from './prompts/materials.ts'
 export {
   buildTranslatePrompt,
   type Prompt,
@@ -56,6 +58,7 @@ export {
 export { calculateChunkSize, chunkText } from './text/chunk.ts'
 export { placeholderParity, protectPlaceholders, restorePlaceholders } from './text/placeholders.ts'
 export { normalizeSentence, splitSentences } from './text/sentences.ts'
+export { escapeRe, wholeTermRe } from './text/terms.ts'
 export { countTokens } from './text/tokens.ts'
 export { type LearnInput, learnCorrections } from './tm/learn.ts'
 export { FUZZY_THRESHOLD, formatMemoryBlock, matchMemory, trigramSimilarity } from './tm/match.ts'

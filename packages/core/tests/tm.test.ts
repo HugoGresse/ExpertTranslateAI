@@ -103,3 +103,37 @@ describe('learnCorrections', () => {
     ).toEqual([])
   })
 })
+
+describe('memory review fixes', () => {
+  it('prefers the newest entry when a sentence was corrected twice', () => {
+    const entries = [
+      { ...tm('new', 'Click Save.', 'Cliquez sur Enregistrer.'), createdAt: 2 },
+      { ...tm('old', 'Click Save.', 'Cliquez sur Sauver.'), createdAt: 1 },
+    ]
+    expect(matchMemory('Click Save.', entries, 'en', 'fr').exact[0]?.entryId).toBe('new')
+    expect(matchMemory('Click Save.', [...entries].reverse(), 'en', 'fr').exact[0]?.entryId).toBe(
+      'new',
+    )
+  })
+
+  it('does not match when the source language is unknown', () => {
+    expect(matchMemory('Click Save.', [tm('a', 'Click Save.', 'x')], null, 'fr')).toEqual({
+      exact: [],
+      fuzzy: [],
+    })
+  })
+
+  it('refuses to learn without a concrete source language', () => {
+    expect(
+      learnCorrections({
+        sourceText: 'One.',
+        originalText: 'Un.',
+        editedText: 'Uno.',
+        sourceLang: 'auto',
+        targetLang: 'fr',
+        makeId: () => 'id',
+        now: 1,
+      }),
+    ).toEqual([])
+  })
+})

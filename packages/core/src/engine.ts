@@ -89,11 +89,13 @@ export function createEngine(ports: EnginePorts): Engine {
               : Promise.resolve([]),
             job.options.useMemory ? ports.storage.tm.list() : Promise.resolve([]),
           ])
+        const explicitDomain = job.domain === 'auto' ? null : job.domain
+        const preModels = routeModels(job.models, job.options.routing, explicitDomain)
         const { sources } = await ensureDigests(
           rawSources.filter((s) => isRelevantSource(s, job)),
           {
             budgetPerSource: job.options.contextTokenBudget,
-            model: job.models.helper,
+            model: preModels.helper,
             storage: ports.storage,
             ctx,
           },
@@ -103,7 +105,7 @@ export function createEngine(ports: EnginePorts): Engine {
         if (needsBrief(job)) {
           brief = await runBrief(
             {
-              model: job.models.helper,
+              model: preModels.helper,
               sourceText: briefSource(job.sourceText),
               sourceLangHint: job.sourceLang === AUTO_LANG ? 'unknown, detect it' : job.sourceLang,
               targetLangs: job.targets.map((t) => t.lang),
@@ -114,11 +116,7 @@ export function createEngine(ports: EnginePorts): Engine {
           events.emit({ type: 'brief-done', brief })
         }
         const plan = resolvePlan(job, brief)
-        const models = routeModels(
-          job.models,
-          job.options.routing,
-          brief?.domain ?? (job.domain === 'auto' ? null : job.domain),
-        )
+        const models = routeModels(preModels, job.options.routing, brief?.domain ?? explicitDomain)
         ports.logger.info('job.plan', {
           difficulty: plan.difficulty,
           translators: plan.translators.length,

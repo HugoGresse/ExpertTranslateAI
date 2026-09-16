@@ -397,3 +397,131 @@ describe('engine.run escalation and routing', () => {
     expect(events.some((e) => e.type === 'escalated')).toBe(false)
   })
 })
+
+describe('engine.run review fixes', () => {
+  it('does not flag a glossary term kept inside a protected code span', async () => {
+    const llm = createFakeLlm((req) => {
+      const user = req.messages[1]?.content ?? ''
+      const token = user.match(/⟦PH\d+⟧/)?.[0] ?? ''
+      return `Lance la commande ${token} maintenant.`
+    })
+    const storage = createMemoryStorage()
+    await storage.glossaryScopes.put({ id: 'g', level: 'global', name: 'G', createdAt: 0 })
+    await storage.glossaryEntries.put({
+      id: 'e1',
+      scopeId: 'g',
+      source: 'workflow',
+      target: 'flux de travail',
+      lang: 'fr',
+      kind: 'preferred',
+      caseSensitive: false,
+      createdAt: 0,
+    })
+    const engine = createEngine({ llm, storage, clock: { now: () => 1 }, logger: noopLogger })
+    const job = sampleJob({
+      targets: [{ lang: 'fr' }],
+      sourceText: 'Run the `workflow` command now.',
+    })
+    job.options.glossaryScopeIds = ['g']
+    job.options.autoEscalate = true
+    const events = await collect(engine.run(job))
+    const done = events.find((e) => e.type === 'target-done')
+    if (done?.type !== 'target-done') throw new Error('no result')
+    expect(done.result.terminologyReport).toEqual([])
+    expect(done.result.escalations).toEqual([])
+    expect(done.result.finalText).toBe('Lance la commande `workflow` maintenant.')
+    expect(done.result.sourceText).toBe('Run the `workflow` command now.')
+    expect(done.result.sourceLang).toBe('en')
+  })
+
+  it('keeps the first pass when the escalation rerun trips the budget', async () => {
+    const brief = JSON.stringify({
+      detectedLang: 'en',
+      domain: 'general',
+      difficulty: 'normal',
+      summary: '',
+      tone: '',
+      audience: '',
+      keyTerms: [],
+      risks: [],
+    })
+    const llm = createFakeLlm(
+      (req) => {
+        switch (req.model) {
+          case 'test/helper':
+            return brief
+          case 'test/model':
+            return 'Il y a 12 clauses.'
+          case 'test/model-b':
+            return 'Il y a 21 clauses.'
+          case 'test/reviewer':
+            return req.messages[0]?.content.includes('audit')
+              ? '{"violations": []}'
+              : JSON.stringify({ issues: [], suggestions: [], preferred: 'translatorA' })
+          case 'test/finalizer':
+            return 'Il y a 12 clauses.'
+          case 'test/scorer':
+            return JSON.stringify({
+              fidelity: 90,
+              terminology: 90,
+              grammar: 90,
+              naturalness: 90,
+              register: 90,
+              consistency: 90,
+              confidence: 90,
+              notes: [],
+            })
+          default:
+            return 'x'
+        }
+      },
+      { promptTokens: 1, completionTokens: 1, costUsd: 0.01 },
+    )
+    const engine = createEngine({
+      llm,
+      storage: createMemoryStorage(),
+      clock: { now: () => 1 },
+      logger: noopLogger,
+    })
+    const job = sampleJob({
+      targets: [{ lang: 'fr' }],
+      difficulty: 'normal',
+      sourceText: 'There are 12 clauses.',
+    })
+    job.options.autoEscalate = true
+    job.options.budgetUsd = 0.075
+    const events = await collect(engine.run(job))
+    const done = events.find((e) => e.type === 'target-done')
+    if (done?.type !== 'target-done') throw new Error('target failed instead of degrading')
+    expect(done.result.plan.difficulty).toBe('normal')
+    expect(done.result.escalations).toEqual([])
+    expect(done.result.finalText).toBe('Il y a 12 clauses.')
+  })
+
+  it('routes the helper when the domain is set explicitly', async () => {
+    const llm = createFakeLlm((req) =>
+      req.model === 'legal/helper'
+        ? JSON.stringify({
+            detectedLang: 'en',
+            domain: 'legal',
+            difficulty: 'simple',
+            summary: '',
+            tone: '',
+            audience: '',
+            keyTerms: [],
+            risks: [],
+          })
+        : 'ok',
+    )
+    const engine = createEngine({
+      llm,
+      storage: createMemoryStorage(),
+      clock: { now: () => 1 },
+      logger: noopLogger,
+    })
+    const job = sampleJob({ targets: [{ lang: 'fr' }], difficulty: 'normal', domain: 'legal' })
+    job.options.routing = [{ domain: 'legal', role: 'helper', model: 'legal/helper' }]
+    await collect(engine.run(job))
+    expect(llm.calls[0]?.request.model).toBe('legal/helper')
+  })
+})

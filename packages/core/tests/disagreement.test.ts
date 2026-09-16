@@ -168,3 +168,17 @@ describe('routeModels', () => {
     )
   })
 })
+
+describe('glossaryTargetTerms', () => {
+  it('maps preferred entries to their target rendering and keeps do-not-translate sources', async () => {
+    const { glossaryTargetTerms } = await import('../src/glossary/check.ts')
+    const base = { scopeId: 'g', lang: 'fr', caseSensitive: false, createdAt: 0 } as const
+    expect(
+      glossaryTargetTerms([
+        { ...base, id: '1', source: 'workflow', target: 'flux de travail', kind: 'preferred' },
+        { ...base, id: '2', source: 'Hyperfluid', target: '', kind: 'doNotTranslate' },
+        { ...base, id: '3', source: 'dashboard', target: 'tableau de bord', kind: 'forbidden' },
+      ]),
+    ).toEqual(['flux de travail', 'Hyperfluid', 'tableau de bord'])
+  })
+})

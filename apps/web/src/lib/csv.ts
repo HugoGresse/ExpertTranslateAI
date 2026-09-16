@@ -36,16 +36,3 @@ const escapeField = (v: string): string => (/[",\n\r]/.test(v) ? `"${v.replace(/
 
 export const toCsv = (rows: string[][]): string =>
   rows.map((r) => r.map(escapeField).join(',')).join('\n')
-
-export function downloadText(
-  filename: string,
-  text: string,
-  type = 'text/csv;charset=utf-8',
-): void {
-  const url = URL.createObjectURL(new Blob([text], { type }))
-  const a = document.createElement('a')
-  a.href = url
-  a.download = filename
-  a.click()
-  URL.revokeObjectURL(url)
-}

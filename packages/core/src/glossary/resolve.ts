@@ -32,7 +32,10 @@ export function resolveGlossary(
   )
   const winners = new Map<string, GlossaryEntry>()
   for (const entry of applicable) {
-    const key = `${entry.kind === 'forbidden' ? 'f' : 'p'}:${termKey(entry)}`
+    const key =
+      entry.kind === 'forbidden'
+        ? `f:${termKey(entry)}:${entry.target.trim().toLowerCase()}`
+        : `p:${termKey(entry)}`
     const current = winners.get(key)
     if (!current || levelRank(byId.get(entry.scopeId)) >= levelRank(byId.get(current.scopeId))) {
       winners.set(key, entry)

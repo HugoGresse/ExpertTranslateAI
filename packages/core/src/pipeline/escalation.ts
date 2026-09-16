@@ -8,10 +8,12 @@ import type {
 
 export const DIFFICULTY_ORDER: Difficulty[] = ['simple', 'normal', 'hard', 'critical']
 
-export const nextDifficulty = (d: Difficulty): Difficulty | null => {
-  const i = DIFFICULTY_ORDER.indexOf(d)
-  return i >= 0 && i < DIFFICULTY_ORDER.length - 2 ? (DIFFICULTY_ORDER[i + 1] ?? null) : null
+const ESCALATION_LADDER: Partial<Record<Difficulty, Difficulty>> = {
+  simple: 'normal',
+  normal: 'hard',
 }
+
+export const nextDifficulty = (d: Difficulty): Difficulty | null => ESCALATION_LADDER[d] ?? null
 
 export interface EscalationDecision {
   chunks: number[]

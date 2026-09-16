@@ -1,12 +1,5 @@
 import { expect, test } from '@playwright/test'
-
-const sse = (text: string): string =>
-  [
-    `data: ${JSON.stringify({ choices: [{ delta: { content: text } }] })}`,
-    `data: ${JSON.stringify({ choices: [{ delta: {} }], usage: { prompt_tokens: 30, completion_tokens: 5, cost: 0.001 } })}`,
-    'data: [DONE]',
-    '',
-  ].join('\n\n')
+import { sse } from './helpers'
 
 const replies: Record<string, string> = {
   'test/helper': JSON.stringify({
@@ -75,7 +68,7 @@ test('normal difficulty runs brief, two translators, review, finalize and score'
   await page.getByRole('button', { name: 'Translate' }).click()
 
   await expect(page.locator('textarea').nth(1)).toHaveValue('Bonjour final')
-  await expect(page.getByText('technical')).toBeVisible()
+  await expect(page.locator('span', { hasText: /^technical$/ }).first()).toBeVisible()
   await expect(page.getByText('overall · confidence')).toBeVisible()
   await expect(page.getByText('Pipeline: normal · 2 translators · reviewed')).toBeVisible()
   await page.getByRole('button', { name: /Show review/ }).click()

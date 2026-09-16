@@ -9,6 +9,7 @@ import { type FC, useEffect, useState } from 'react'
 import { storage } from '../adapters/dexieStorage'
 import { logger } from '../adapters/logger'
 import { languageName, RTL_LANGS } from '../data/languages'
+import { downloadText } from '../lib/download'
 import type { TargetProgress } from '../stores/run'
 import {
   CandidatesCard,
@@ -21,18 +22,6 @@ import { Button, formatUsd } from './ui'
 
 export interface ResultPanelProps {
   targets: Record<string, TargetProgress>
-  sourceText: string
-  sourceLang: string
-}
-
-const download = (lang: string, text: string): void => {
-  const blob = new Blob([text], { type: 'text/plain;charset=utf-8' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `translation-${lang}.txt`
-  a.click()
-  URL.revokeObjectURL(url)
 }
 
 const TraceDrawer: FC<{ trace: TraceEvent[] }> = ({ trace }) => {
@@ -96,31 +85,34 @@ const GuidelineReport: FC<{ violations: GuidelineViolation[] }> = ({ violations 
   )
 }
 
-const FinalText: FC<{ result: TargetResult; sourceText: string; sourceLang: string }> = ({
-  result,
-  sourceText,
-  sourceLang,
-}) => {
+const FinalText: FC<{ result: TargetResult }> = ({ result }) => {
   const [text, setText] = useState(result.finalText)
   const [saved, setSaved] = useState<string | null>(null)
   useEffect(() => setText(result.finalText), [result.finalText])
+  const canLearn = result.sourceLang !== null
   const saveCorrection = async (): Promise<void> => {
+    if (!result.sourceLang) return
     const entries = learnCorrections({
-      sourceText,
+      sourceText: result.sourceText,
       originalText: result.finalText,
       editedText: text,
-      sourceLang: sourceLang === 'auto' ? (result.brief?.detectedLang ?? 'auto') : sourceLang,
+      sourceLang: result.sourceLang,
       targetLang: result.lang,
       makeId: () => crypto.randomUUID(),
       now: Date.now(),
     })
-    for (const e of entries) await storage.tm.put(e)
-    logger.info('memory.learned', { lang: result.lang, count: entries.length })
-    setSaved(
-      entries.length === 0
-        ? 'No changes to save.'
-        : `Saved ${entries.length} correction${entries.length > 1 ? 's' : ''} to memory.`,
-    )
+    try {
+      for (const e of entries) await storage.tm.put(e)
+      logger.info('memory.learned', { lang: result.lang, count: entries.length })
+      setSaved(
+        entries.length === 0
+          ? 'No changes to save.'
+          : `Saved ${entries.length} correction${entries.length > 1 ? 's' : ''} to memory.`,
+      )
+    } catch (error) {
+      logger.error('memory.learnFailed', { lang: result.lang, error: String(error) })
+      setSaved('Could not save to memory.')
+    }
   }
   const dir = RTL_LANGS.has(result.lang) ? 'rtl' : 'ltr'
   return (
@@ -134,8 +126,18 @@ const FinalText: FC<{ result: TargetResult; sourceText: string; sourceLang: stri
       />
       <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-neutral-600">
         <Button onClick={() => void navigator.clipboard.writeText(text)}>Copy</Button>
-        <Button onClick={() => download(result.lang, text)}>Download</Button>
-        <Button disabled={text === result.finalText} onClick={() => void saveCorrection()}>
+        <Button onClick={() => downloadText(`translation-${result.lang}.txt`, text)}>
+          Download
+        </Button>
+        <Button
+          disabled={text === result.finalText || !canLearn}
+          title={
+            canLearn
+              ? undefined
+              : 'Set a source language (or run with a brief) to learn corrections'
+          }
+          onClick={() => void saveCorrection()}
+        >
           Save as correction
         </Button>
         {saved ? <span>{saved}</span> : null}
@@ -164,7 +166,7 @@ const FinalText: FC<{ result: TargetResult; sourceText: string; sourceLang: stri
   )
 }
 
-export const ResultPanel: FC<ResultPanelProps> = ({ targets, sourceText, sourceLang }) => {
+export const ResultPanel: FC<ResultPanelProps> = ({ targets }) => {
   const langs = Object.keys(targets)
   const [active, setActive] = useState(langs[0] ?? '')
   useEffect(() => {
@@ -212,9 +214,7 @@ export const ResultPanel: FC<ResultPanelProps> = ({ targets, sourceText, sourceL
             </pre>
           </div>
         ) : null}
-        {current.result ? (
-          <FinalText result={current.result} sourceText={sourceText} sourceLang={sourceLang} />
-        ) : null}
+        {current.result ? <FinalText result={current.result} /> : null}
       </div>
     </div>
   )

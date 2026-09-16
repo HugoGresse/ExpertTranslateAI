@@ -5,12 +5,16 @@ import {
   type GlossaryLevel,
   type GlossaryScope,
 } from '@experttranslate/core'
+import { useStore } from '@nanostores/react'
 import { type FC, useMemo, useState } from 'react'
 import { storage } from '../adapters/dexieStorage'
 import { logger } from '../adapters/logger'
 import { LANGUAGES, languageName } from '../data/languages'
 import { useRepo } from '../hooks/useRepo'
-import { downloadText, parseCsv, toCsv } from '../lib/csv'
+import { parseCsv, toCsv } from '../lib/csv'
+import { downloadText } from '../lib/download'
+import { pickOneOf } from '../lib/guards'
+import { $targets } from '../stores/settings'
 import { Button, Card, Field, inputClass } from './ui'
 
 const KINDS: GlossaryKind[] = ['preferred', 'forbidden', 'doNotTranslate']
@@ -54,7 +58,7 @@ const ScopeForm: FC<{ scopes: GlossaryScope[]; onSave: (s: GlossaryScope) => Pro
         <select
           className={inputClass}
           value={level}
-          onChange={(e) => setLevel(e.target.value as GlossaryLevel)}
+          onChange={(e) => setLevel(pickOneOf(GLOSSARY_LEVELS, e.target.value, level))}
           aria-label="Scope level"
         >
           {GLOSSARY_LEVELS.map((l) => (
@@ -99,13 +103,14 @@ const ScopeForm: FC<{ scopes: GlossaryScope[]; onSave: (s: GlossaryScope) => Pro
   )
 }
 
-const EntryForm: FC<{ scopeId: string; onSave: (e: GlossaryEntry) => Promise<void> }> = ({
-  scopeId,
-  onSave,
-}) => {
+const EntryForm: FC<{
+  scopeId: string
+  defaultLang: string
+  onSave: (e: GlossaryEntry) => Promise<void>
+}> = ({ scopeId, defaultLang, onSave }) => {
   const [source, setSource] = useState('')
   const [target, setTarget] = useState('')
-  const [lang, setLang] = useState('fr')
+  const [lang, setLang] = useState(defaultLang)
   const [kind, setKind] = useState<GlossaryKind>('preferred')
   const [caseSensitive, setCaseSensitive] = useState(false)
   const submit = async (): Promise<void> => {
@@ -155,7 +160,7 @@ const EntryForm: FC<{ scopeId: string; onSave: (e: GlossaryEntry) => Promise<voi
       <select
         className={inputClass}
         value={kind}
-        onChange={(e) => setKind(e.target.value as GlossaryKind)}
+        onChange={(e) => setKind(pickOneOf(KINDS, e.target.value, kind))}
         aria-label="Entry kind"
       >
         {KINDS.map((k) => (
@@ -184,16 +189,22 @@ export const GlossaryManager: FC = () => {
   const entries = useRepo<GlossaryEntry>(storage.glossaryEntries)
   const [activeScope, setActiveScope] = useState<string>('')
   const active = scopes.items.find((s) => s.id === activeScope) ?? scopes.items[0]
+  const targets = useStore($targets)
+  const defaultLang = active?.lang ?? targets[0]?.lang ?? 'fr'
   const scopeEntries = useMemo(
     () => entries.items.filter((e) => e.scopeId === active?.id),
     [entries.items, active],
   )
 
   const removeScope = async (id: string): Promise<void> => {
-    for (const e of entries.items.filter((x) => x.scopeId === id))
-      await storage.glossaryEntries.delete(e.id)
-    await scopes.remove(id)
-    await entries.reload()
+    try {
+      for (const e of entries.items.filter((x) => x.scopeId === id))
+        await storage.glossaryEntries.delete(e.id)
+      await scopes.remove(id)
+      await entries.reload()
+    } catch (error) {
+      logger.error('glossary.removeScopeFailed', { scope: id, error: String(error) })
+    }
   }
 
   const exportCsv = (): void => {
@@ -209,24 +220,39 @@ export const GlossaryManager: FC = () => {
         e.note ?? '',
       ]),
     ]
-    downloadText(`glossary-${active.name}.csv`, toCsv(rows))
+    downloadText(`glossary-${active.name}.csv`, toCsv(rows), 'text/csv;charset=utf-8')
   }
 
   const importCsv = async (file: File): Promise<void> => {
     if (!active) return
+    try {
+      await importRows(file)
+    } catch (error) {
+      logger.error('glossary.importFailed', { scope: active.id, error: String(error) })
+    }
+  }
+
+  const importRows = async (file: File): Promise<void> => {
+    if (!active) return
     const rows = parseCsv(await file.text())
     const body = rows[0]?.[0]?.toLowerCase() === 'source' ? rows.slice(1) : rows
     let count = 0
+    let skipped = 0
     for (const r of body) {
-      const [source, target = '', lang = 'fr', kind = 'preferred', cs = 'false', note = ''] = r
+      const [source, target = '', lang = defaultLang, kind = 'preferred', cs = 'false', note = ''] =
+        r
       if (!source?.trim()) continue
-      const k = KINDS.includes(kind as GlossaryKind) ? (kind as GlossaryKind) : 'preferred'
+      const k = pickOneOf(KINDS, kind.trim(), 'preferred')
+      if (k !== 'doNotTranslate' && !target.trim()) {
+        skipped++
+        continue
+      }
       await storage.glossaryEntries.put({
         id: crypto.randomUUID(),
         scopeId: active.id,
         source: source.trim(),
         target: target.trim(),
-        lang: lang.trim() || 'fr',
+        lang: lang.trim() || defaultLang,
         kind: k,
         caseSensitive: cs.trim() === 'true',
         createdAt: Date.now(),
@@ -234,7 +260,7 @@ export const GlossaryManager: FC = () => {
       })
       count++
     }
-    logger.info('glossary.imported', { scope: active.id, count })
+    logger.info('glossary.imported', { scope: active.id, count, skipped })
     await entries.reload()
   }
 
@@ -278,7 +304,12 @@ export const GlossaryManager: FC = () => {
       <Card title={active ? `Entries in ${active.name} (${scopeEntries.length})` : 'Entries'}>
         {active ? (
           <div className="flex flex-col gap-3">
-            <EntryForm scopeId={active.id} onSave={entries.save} />
+            <EntryForm
+              key={`${active.id}-${defaultLang}`}
+              scopeId={active.id}
+              defaultLang={defaultLang}
+              onSave={entries.save}
+            />
             <div className="flex flex-wrap gap-2">
               <Button onClick={exportCsv}>Export CSV</Button>
               <label className="rounded-md border border-neutral-300 bg-white px-3 py-1.5 text-sm font-medium hover:bg-neutral-50">
