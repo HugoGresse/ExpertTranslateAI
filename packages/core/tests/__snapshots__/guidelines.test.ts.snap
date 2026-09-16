@@ -1,0 +1,14 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`guidelines > formats a numbered block with examples and free text 1`] = `
+"<GUIDELINES>
+1. MUST NOT Keep product names in English
+2. PREFER Use the informal "tu" form
+   Good: Tu peux
+   Bad: Vous pouvez
+3. MUST Mention the CLI name hfctl
+
+### German only
+Use Sie.
+</GUIDELINES>"
+`;

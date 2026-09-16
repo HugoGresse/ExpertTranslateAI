@@ -17,12 +17,68 @@ export interface JobOptions {
   formality?: 'formal' | 'informal' | 'auto'
   preserveFormatting: boolean
   maxTokensPerChunk: number
+  contextSourceIds: string[]
+  guidelineSetIds: string[]
+  contextTokenBudget: number
+  guidelinesTokenBudget: number
+}
+
+export type ContextKind = 'llms-txt' | 'markdown-url' | 'markdown-file' | 'pasted'
+
+export interface ContextDigest {
+  text: string
+  model: string
+  tokenEstimate: number
+  forHash: string
+}
+
+export interface ContextSource {
+  id: string
+  name: string
+  kind: ContextKind
+  url?: string
+  rawText: string
+  contentHash: string
+  fetchedAt?: number
+  condensed?: ContextDigest
+  enabled: boolean
+  lang?: LanguageCode
+  createdAt: number
+}
+
+export type GuidelineKind = 'must' | 'must-not' | 'prefer'
+
+export interface GuidelineRule {
+  id: string
+  text: string
+  kind: GuidelineKind
+  pattern?: string
+  examples?: { good?: string; bad?: string }
+}
+
+export interface GuidelineSet {
+  id: string
+  name: string
+  rules: GuidelineRule[]
+  freeText?: string
+  enabled: boolean
+  lang?: LanguageCode
+  createdAt: number
+}
+
+export interface GuidelineViolation {
+  ruleId: string
+  ruleText: string
+  severity: 'minor' | 'major'
+  targetSpan?: string
+  explanation: string
 }
 
 export type JobStatus = 'queued' | 'running' | 'done' | 'failed' | 'cancelled'
 
 export interface RoleModels {
   translatorA: string
+  helper: string
 }
 
 export interface TranslationJob {
@@ -86,6 +142,7 @@ export interface TargetResult {
   chunks: Chunk[]
   candidates: Candidate[]
   finalText: string
+  guidelineReport: GuidelineViolation[]
   cost: CostSummary
   trace: TraceEvent[]
   status: 'done' | 'failed' | 'cancelled'
@@ -145,6 +202,7 @@ export interface KeyInfo {
 
 export interface JobEstimate {
   sourceTokens: number
+  contextTokens: number
   chunkCount: number
   callCount: number
   estimatedUsd: number | null

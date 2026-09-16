@@ -3,6 +3,7 @@
 exports[`translate prompt > matches snapshot 1`] = `
 {
   "system": "You are an expert linguist, specializing in translation from English to es as spoken in Mexico.
+
 Tone: friendly.
 Preserve Markdown structure, line breaks, lists and inline formatting exactly.
 Never translate or alter tokens of the form ⟦PHn⟧; keep every one of them in place.",

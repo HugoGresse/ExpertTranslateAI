@@ -1,4 +1,17 @@
+export { condenseSource, hasFreshDigest, needsCondense, sourceText } from './context/condense.ts'
+export { contentHash } from './context/hash.ts'
+export { digestLlmsTxt, isLlmsTxt, type LlmsTxt, parseLlmsTxt } from './context/llmsTxt.ts'
+export {
+  activeContextSources,
+  buildContextBlock,
+  ensureDigests,
+  truncateToTokens,
+} from './context/prepare.ts'
 export { createEngine, type Engine } from './engine.ts'
+export { checkGuidelines, checkRule, isCheckable } from './guidelines/check.ts'
+export { extractRules, normalizeRules } from './guidelines/extract.ts'
+export { activeGuidelineSets, formatGuidelinesBlock, numberRules } from './guidelines/format.ts'
+export { collectText, extractJson } from './llm/collect.ts'
 export { createLimiter, type Limiter } from './llm/limiter.ts'
 export {
   createOpenRouterLlm,
@@ -22,6 +35,7 @@ export type {
   StoragePort,
 } from './ports.ts'
 export { noopLogger, systemClock } from './ports.ts'
+export { assembleSystem, type SystemBlocks } from './prompts/assembleSystem.ts'
 export {
   buildTranslatePrompt,
   type Prompt,

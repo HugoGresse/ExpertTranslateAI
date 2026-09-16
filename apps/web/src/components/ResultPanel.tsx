@@ -1,4 +1,4 @@
-import type { TargetResult, TraceEvent } from '@experttranslate/core'
+import type { GuidelineViolation, TargetResult, TraceEvent } from '@experttranslate/core'
 import { type FC, useEffect, useState } from 'react'
 import { languageName, RTL_LANGS } from '../data/languages'
 import type { TargetProgress } from '../stores/run'
@@ -55,6 +55,25 @@ const TraceDrawer: FC<{ trace: TraceEvent[] }> = ({ trace }) => {
   )
 }
 
+const GuidelineReport: FC<{ violations: GuidelineViolation[] }> = ({ violations }) => {
+  if (violations.length === 0)
+    return <p className="mt-2 text-xs text-green-700">Guidelines: no rule violations detected.</p>
+  return (
+    <div className="mt-2 rounded-md border border-amber-300 bg-amber-50 p-2 text-xs">
+      <p className="font-medium">
+        Guidelines: {violations.length} violation{violations.length > 1 ? 's' : ''}
+      </p>
+      <ul className="mt-1 list-disc pl-4">
+        {violations.map((v) => (
+          <li key={`${v.ruleId}-${v.targetSpan ?? ''}`}>
+            <span className="font-medium">{v.ruleText}</span> — {v.explanation}
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
 const FinalText: FC<{ result: TargetResult }> = ({ result }) => {
   const [text, setText] = useState(result.finalText)
   useEffect(() => setText(result.finalText), [result.finalText])
@@ -76,6 +95,7 @@ const FinalText: FC<{ result: TargetResult }> = ({ result }) => {
           in / {result.cost.tokensOut} out · {formatUsd(result.cost.usd)}
         </span>
       </div>
+      <GuidelineReport violations={result.guidelineReport} />
       <TraceDrawer trace={result.trace} />
     </div>
   )

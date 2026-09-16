@@ -114,6 +114,40 @@ export const SettingsPanel: FC = () => {
             </Button>
           </Field>
           <Field
+            label="Helper model"
+            hint="Used to condense context and extract guideline rules. Empty = translator model."
+          >
+            <ModelPicker
+              models={models}
+              value={settings.helperModel || settings.translatorModel}
+              loading={loading}
+              onChange={(id) => $settings.setKey('helperModel', id)}
+            />
+          </Field>
+          <Field
+            label="Context budget (tokens per source)"
+            hint="Sources above this size are condensed once by the helper model."
+          >
+            <input
+              className={inputClass}
+              type="number"
+              min={500}
+              max={32000}
+              value={settings.contextTokenBudget}
+              onChange={(e) => $settings.setKey('contextTokenBudget', e.target.value)}
+            />
+          </Field>
+          <Field label="Guidelines budget (tokens)">
+            <input
+              className={inputClass}
+              type="number"
+              min={200}
+              max={8000}
+              value={settings.guidelinesTokenBudget}
+              onChange={(e) => $settings.setKey('guidelinesTokenBudget', e.target.value)}
+            />
+          </Field>
+          <Field
             label="Max tokens per chunk"
             hint="Longer texts are split into balanced chunks of at most this size."
           >

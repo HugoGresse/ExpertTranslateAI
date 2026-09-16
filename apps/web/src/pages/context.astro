@@ -1,0 +1,8 @@
+---
+import { ContextManager } from '../components/ContextManager'
+import Base from '../layouts/Base.astro'
+---
+
+<Base title="Context">
+  <ContextManager client:only="react" />
+</Base>

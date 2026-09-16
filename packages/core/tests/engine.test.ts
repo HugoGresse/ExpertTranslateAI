@@ -70,3 +70,46 @@ describe('engine.run', () => {
     expect(estimate.estimatedUsd).toBeGreaterThan(0)
   })
 })
+
+describe('engine.run with context and guidelines', () => {
+  it('injects context and guidelines into prompts and reports rule violations', async () => {
+    const llm = createFakeLlm((req) =>
+      req.model === 'test/helper' ? 'DIGEST' : 'Bienvenue sur Hyperfluide',
+    )
+    const storage = createMemoryStorage()
+    await storage.contexts.put({
+      id: 'c1',
+      name: 'Notes',
+      kind: 'pasted',
+      rawText: 'Hyperfluid stays Hyperfluid.',
+      contentHash: 'h',
+      enabled: true,
+      createdAt: 0,
+    })
+    await storage.guidelines.put({
+      id: 'g1',
+      name: 'Names',
+      enabled: true,
+      createdAt: 0,
+      rules: [
+        { id: 'r1', text: 'Never translate Hyperfluid', kind: 'must-not', pattern: 'Hyperfluide' },
+      ],
+    })
+    const engine = createEngine({ llm, storage, clock: { now: () => 1 }, logger: noopLogger })
+    const job = sampleJob({ targets: [{ lang: 'fr' }] })
+    job.options.contextSourceIds = ['c1']
+    job.options.guidelineSetIds = ['g1']
+
+    const events = await collect(engine.run(job))
+    const done = events.find((e) => e.type === 'target-done')
+    expect(done?.type).toBe('target-done')
+    if (done?.type !== 'target-done') return
+    expect(done.result.guidelineReport).toHaveLength(1)
+    expect(done.result.guidelineReport[0]?.targetSpan).toBe('Hyperfluide')
+    const system = llm.calls[0]?.request.messages[0]?.content ?? ''
+    expect(system).toContain('<CONTEXT>')
+    expect(system).toContain('Hyperfluid stays Hyperfluid.')
+    expect(system).toContain('1. MUST NOT translate Hyperfluid')
+    expect(llm.calls).toHaveLength(1)
+  })
+})

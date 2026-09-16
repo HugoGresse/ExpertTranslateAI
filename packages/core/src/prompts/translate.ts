@@ -1,4 +1,5 @@
 import type { JobOptions, Target } from '../types.ts'
+import { assembleSystem } from './assembleSystem.ts'
 
 export interface TranslatePromptInput {
   sourceLang: string
@@ -7,6 +8,8 @@ export interface TranslatePromptInput {
   fullText: string
   chunkText: string
   isMultiChunk: boolean
+  contextBlock?: string
+  guidelinesBlock?: string
 }
 
 export interface Prompt {
@@ -31,10 +34,14 @@ function styleLines(options: TranslatePromptInput['options']): string[] {
 }
 
 export function translateSystemPrompt(input: TranslatePromptInput): string {
-  return [
-    `You are an expert linguist, specializing in translation from ${input.sourceLang} to ${targetLabel(input.target)}.`,
-    ...styleLines(input.options),
-  ].join('\n')
+  return assembleSystem({
+    role: [
+      `You are an expert linguist, specializing in translation from ${input.sourceLang} to ${targetLabel(input.target)}.`,
+    ],
+    ...(input.contextBlock ? { context: input.contextBlock } : {}),
+    ...(input.guidelinesBlock ? { guidelines: input.guidelinesBlock } : {}),
+    task: styleLines(input.options),
+  })
 }
 
 export function translateUserPrompt(input: TranslatePromptInput): string {

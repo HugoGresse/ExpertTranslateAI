@@ -1,6 +1,8 @@
 import type {
   ChatChunk,
   ChatRequest,
+  ContextSource,
+  GuidelineSet,
   KeyInfo,
   ModelInfo,
   ProgressEvent,
@@ -31,6 +33,8 @@ export interface ResultRepo {
 export interface StoragePort {
   jobs: Repo<TranslationJob>
   results: ResultRepo
+  contexts: Repo<ContextSource>
+  guidelines: Repo<GuidelineSet>
 }
 
 export interface FetchPort {

@@ -1,20 +1,48 @@
-import type { JobEstimate, Target, TranslationJob } from '@experttranslate/core'
+import type {
+  ContextSource,
+  GuidelineSet,
+  JobEstimate,
+  Target,
+  TranslationJob,
+} from '@experttranslate/core'
 import { useStore } from '@nanostores/react'
 import { type FC, useEffect, useMemo, useRef, useState } from 'react'
+import { storage } from '../adapters/dexieStorage'
 import { createBrowserEngine } from '../adapters/engineFactory'
 import { $apiKey } from '../adapters/keyVault'
 import { logger } from '../adapters/logger'
 import { LANGUAGES } from '../data/languages'
 import { useModels } from '../hooks/useModels'
+import { useRepo } from '../hooks/useRepo'
 import { $run, applyProgress, idleRun } from '../stores/run'
-import { $settings, $sourceDraft, $targets, numberSetting, type Settings } from '../stores/settings'
+import {
+  $selectedContextIds,
+  $selectedGuidelineIds,
+  $settings,
+  $sourceDraft,
+  $targets,
+  numberSetting,
+  type Settings,
+  toggleId,
+} from '../stores/settings'
 import { KeyGate } from './KeyGate'
+import { MaterialChips } from './MaterialChips'
 import { ModelPicker } from './ModelPicker'
 import { ResultPanel } from './ResultPanel'
 import { TargetPicker } from './TargetPicker'
 import { Button, Card, Field, formatUsd, inputClass } from './ui'
 
-const buildJob = (source: string, s: Settings, targets: Target[]): TranslationJob => {
+interface Selection {
+  contextSourceIds: string[]
+  guidelineSetIds: string[]
+}
+
+const buildJob = (
+  source: string,
+  s: Settings,
+  targets: Target[],
+  selection: Selection,
+): TranslationJob => {
   return {
     id: crypto.randomUUID(),
     createdAt: Date.now(),
@@ -23,10 +51,14 @@ const buildJob = (source: string, s: Settings, targets: Target[]): TranslationJo
     targets,
     domain: 'auto',
     difficulty: 'simple',
-    models: { translatorA: s.translatorModel },
+    models: { translatorA: s.translatorModel, helper: s.helperModel || s.translatorModel },
     options: {
       preserveFormatting: s.preserveFormatting === 'true',
       maxTokensPerChunk: numberSetting(s.maxTokensPerChunk, 1000),
+      contextSourceIds: selection.contextSourceIds,
+      guidelineSetIds: selection.guidelineSetIds,
+      contextTokenBudget: numberSetting(s.contextTokenBudget, 4000),
+      guidelinesTokenBudget: numberSetting(s.guidelinesTokenBudget, 1500),
       formality: s.formality,
       ...(s.tone ? { tone: s.tone } : {}),
       ...(s.audience ? { audience: s.audience } : {}),
@@ -41,9 +73,24 @@ export const TranslateWorkspace: FC = () => {
   const targets = useStore($targets)
   const source = useStore($sourceDraft)
   const run = useStore($run)
+  const selectedContextIds = useStore($selectedContextIds)
+  const selectedGuidelineIds = useStore($selectedGuidelineIds)
+  const contexts = useRepo<ContextSource>(storage.contexts)
+  const guidelines = useRepo<GuidelineSet>(storage.guidelines)
   const { models, loading } = useModels()
   const controller = useRef<AbortController | null>(null)
   const [estimate, setEstimate] = useState<JobEstimate | null>(null)
+  const selection = useMemo<Selection>(
+    () => ({
+      contextSourceIds: selectedContextIds.filter((id) =>
+        contexts.items.some((c) => c.id === id && c.enabled),
+      ),
+      guidelineSetIds: selectedGuidelineIds.filter((id) =>
+        guidelines.items.some((g) => g.id === id && g.enabled),
+      ),
+    }),
+    [selectedContextIds, selectedGuidelineIds, contexts.items, guidelines.items],
+  )
 
   const engineFactory = useMemo(
     () =>
@@ -57,14 +104,20 @@ export const TranslateWorkspace: FC = () => {
       return
     }
     const handle = setTimeout(() => {
-      setEstimate(engineFactory().engine.estimate(buildJob(source, settings, targets), models))
+      setEstimate(
+        engineFactory().engine.estimate(
+          buildJob(source, settings, targets, selection),
+          models,
+          contexts.items,
+        ),
+      )
     }, 300)
     return () => clearTimeout(handle)
-  }, [engineFactory, source, targets, models, settings])
+  }, [engineFactory, source, targets, models, settings, selection, contexts.items])
 
   const start = async (): Promise<void> => {
     if (!engineFactory) return
-    const job = buildJob(source, settings, targets)
+    const job = buildJob(source, settings, targets, selection)
     controller.current = new AbortController()
     logger.info('run.start', {
       jobId: job.id,
@@ -149,6 +202,26 @@ export const TranslateWorkspace: FC = () => {
         </Card>
         <Card title="Targets">
           <TargetPicker targets={targets} onChange={(t) => $targets.set(t)} />
+        </Card>
+        <Card title="Context and guidelines">
+          <MaterialChips
+            label="Context"
+            emptyHint="No context sources. Add an llms.txt or Markdown file on the Context page."
+            items={contexts.items
+              .filter((c) => c.enabled)
+              .map((c) => ({ id: c.id, name: c.name, lang: c.lang }))}
+            selected={selectedContextIds}
+            onToggle={(id) => $selectedContextIds.set(toggleId(selectedContextIds, id))}
+          />
+          <MaterialChips
+            label="Guidelines"
+            emptyHint="No guideline sets. Create one on the Guidelines page."
+            items={guidelines.items
+              .filter((g) => g.enabled)
+              .map((g) => ({ id: g.id, name: g.name, lang: g.lang }))}
+            selected={selectedGuidelineIds}
+            onToggle={(id) => $selectedGuidelineIds.set(toggleId(selectedGuidelineIds, id))}
+          />
         </Card>
         <Card title="Model">
           <ModelPicker

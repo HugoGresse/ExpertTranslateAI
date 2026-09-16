@@ -2,6 +2,8 @@ import type { LlmPort, Repo, ResultRepo, StoragePort } from '../src/ports.ts'
 import type {
   ChatChunk,
   ChatRequest,
+  ContextSource,
+  GuidelineSet,
   ModelInfo,
   TargetResult,
   TranslationJob,
@@ -68,6 +70,8 @@ function memoryResults(): ResultRepo {
 export const createMemoryStorage = (): StoragePort => ({
   jobs: memoryRepo<TranslationJob>(),
   results: memoryResults(),
+  contexts: memoryRepo<ContextSource>(),
+  guidelines: memoryRepo<GuidelineSet>(),
 })
 
 export const sampleJob = (overrides: Partial<TranslationJob> = {}): TranslationJob => ({
@@ -78,8 +82,15 @@ export const sampleJob = (overrides: Partial<TranslationJob> = {}): TranslationJ
   targets: [{ lang: 'fr' }, { lang: 'es', region: 'Mexico' }],
   domain: 'general',
   difficulty: 'simple',
-  models: { translatorA: 'test/model' },
-  options: { preserveFormatting: true, maxTokensPerChunk: 1000 },
+  models: { translatorA: 'test/model', helper: 'test/helper' },
+  options: {
+    preserveFormatting: true,
+    maxTokensPerChunk: 1000,
+    contextSourceIds: [],
+    guidelineSetIds: [],
+    contextTokenBudget: 4000,
+    guidelinesTokenBudget: 1500,
+  },
   status: 'queued',
   ...overrides,
 })

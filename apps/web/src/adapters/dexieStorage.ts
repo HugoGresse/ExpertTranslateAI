@@ -1,4 +1,12 @@
-import type { ModelInfo, StoragePort, TargetResult, TranslationJob } from '@experttranslate/core'
+import type {
+  ContextSource,
+  GuidelineSet,
+  ModelInfo,
+  Repo,
+  StoragePort,
+  TargetResult,
+  TranslationJob,
+} from '@experttranslate/core'
 import Dexie, { type EntityTable } from 'dexie'
 
 export interface ModelCache {
@@ -11,6 +19,8 @@ export class EtaDatabase extends Dexie {
   jobs!: EntityTable<TranslationJob, 'id'>
   results!: EntityTable<TargetResult & { key: string }, 'key'>
   modelCache!: EntityTable<ModelCache, 'id'>
+  contextSources!: EntityTable<ContextSource, 'id'>
+  guidelineSets!: EntityTable<GuidelineSet, 'id'>
 
   constructor() {
     super('experttranslateai')
@@ -19,6 +29,30 @@ export class EtaDatabase extends Dexie {
       results: 'key, jobId, lang',
       modelCache: 'id',
     })
+    this.version(2).stores({
+      contextSources: 'id, createdAt, enabled',
+      guidelineSets: 'id, createdAt, enabled',
+    })
+  }
+}
+
+interface RepoTable<T> {
+  get(key: string): Promise<T | undefined>
+  put(item: T): Promise<unknown>
+  delete(key: string): Promise<void>
+  orderBy(index: string): { reverse(): { toArray(): Promise<T[]> } }
+}
+
+function tableRepo<T extends { id: string; createdAt: number }>(table: RepoTable<T>): Repo<T> {
+  return {
+    get: (id) => table.get(id),
+    put: async (item) => {
+      await table.put(item)
+    },
+    list: () => table.orderBy('createdAt').reverse().toArray(),
+    delete: async (id) => {
+      await table.delete(id)
+    },
   }
 }
 
@@ -48,6 +82,8 @@ export function createDexieStorage(database: EtaDatabase = db): StoragePort {
         await database.results.where('jobId').equals(jobId).delete()
       },
     },
+    contexts: tableRepo<ContextSource>(database.contextSources),
+    guidelines: tableRepo<GuidelineSet>(database.guidelineSets),
   }
 }
 

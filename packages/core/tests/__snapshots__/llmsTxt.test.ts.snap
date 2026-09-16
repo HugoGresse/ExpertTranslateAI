@@ -1,0 +1,12 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`parseLlmsTxt > digests into compact markdown 1`] = `
+"# Hyperfluid
+Managed AI platform for research teams.
+Some intro text.
+## Docs
+- Getting started: Install hfctl and deploy a first app
+- Data Docks
+## Optional
+- Changelog: Release notes"
+`;
