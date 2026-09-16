@@ -178,7 +178,7 @@ const RoutingTable: FC<{
       <ul className="flex flex-col gap-2">
         {rules.map((rule, i) => (
           <li
-            key={`${rule.domain}-${rule.role}-${i}`}
+            key={`${rule.domain}-${rule.role}-${rule.model}`}
             className="grid gap-2 text-sm md:grid-cols-[120px_130px_1fr_auto]"
           >
             <select
