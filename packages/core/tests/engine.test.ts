@@ -291,3 +291,109 @@ describe('engine.run with glossary and memory', () => {
     )
   })
 })
+
+describe('engine.run escalation and routing', () => {
+  const brief = JSON.stringify({
+    detectedLang: 'en',
+    domain: 'legal',
+    difficulty: 'normal',
+    summary: '',
+    tone: '',
+    audience: '',
+    keyTerms: [],
+    risks: [],
+  })
+  const review = JSON.stringify({ issues: [], suggestions: [], preferred: 'translatorA' })
+  const scoreOf = (confidence: number): string =>
+    JSON.stringify({
+      fidelity: 90,
+      terminology: 90,
+      grammar: 90,
+      naturalness: 90,
+      register: 90,
+      consistency: 90,
+      confidence,
+      notes: [],
+    })
+
+  it('routes roles by the brief domain and escalates a chunk with high disagreement', async () => {
+    const llm = createFakeLlm((req) => {
+      switch (req.model) {
+        case 'test/helper':
+          return brief
+        case 'legal/model':
+          return 'Il y a 12 clauses.'
+        case 'test/model-b':
+          return 'Il y a 21 clauses.'
+        case 'test/model-c':
+          return 'Il y a 12 clauses.'
+        case 'test/reviewer':
+          return req.messages[0]?.content.includes('audit') ? '{"violations": []}' : review
+        case 'test/judge':
+          return JSON.stringify({ winner: 'translatorA', rationale: 'A is right' })
+        case 'test/finalizer':
+          return 'Il y a 12 clauses.'
+        case 'test/scorer':
+          return scoreOf(80)
+        default:
+          return 'unexpected'
+      }
+    })
+    const engine = createEngine({
+      llm,
+      storage: createMemoryStorage(),
+      clock: { now: () => 1 },
+      logger: noopLogger,
+    })
+    const job = sampleJob({
+      targets: [{ lang: 'fr' }],
+      difficulty: 'auto',
+      sourceText: 'There are 12 clauses.',
+    })
+    job.options.autoEscalate = true
+    job.options.routing = [{ domain: 'legal', role: 'translatorA', model: 'legal/model' }]
+    const events = await collect(engine.run(job))
+    const escalated = events.find((e) => e.type === 'escalated')
+    expect(escalated?.type === 'escalated' ? `${escalated.from}>${escalated.to}` : '').toBe(
+      'normal>hard',
+    )
+    const done = events.find((e) => e.type === 'target-done')
+    if (done?.type !== 'target-done') throw new Error('no result')
+    expect(done.result.plan.difficulty).toBe('hard')
+    expect(done.result.escalations).toHaveLength(1)
+    expect(done.result.disagreements.some((d) => d.severity === 'high')).toBe(true)
+    expect(done.result.judgments).toHaveLength(1)
+    expect(llm.calls.filter((c) => c.request.model === 'legal/model')).toHaveLength(2)
+    expect(llm.calls.filter((c) => c.request.model === 'test/model-c')).toHaveLength(1)
+    const scorerCalls = llm.calls.filter((c) => c.request.model === 'test/scorer')
+    expect(scorerCalls).toHaveLength(2)
+    const reviewerPrompt =
+      llm.calls.find((c) => c.request.model === 'test/reviewer')?.request.messages[1]?.content ?? ''
+    expect(reviewerPrompt).toContain('<DISAGREEMENTS>')
+    expect(reviewerPrompt).toContain('numbers differ')
+  })
+
+  it('does not escalate when disabled', async () => {
+    const llm = createFakeLlm((req) =>
+      req.model === 'test/helper'
+        ? brief
+        : req.model === 'test/scorer'
+          ? scoreOf(20)
+          : req.model === 'test/reviewer'
+            ? req.messages[0]?.content.includes('audit')
+              ? '{"violations": []}'
+              : review
+            : 'x',
+    )
+    const engine = createEngine({
+      llm,
+      storage: createMemoryStorage(),
+      clock: { now: () => 1 },
+      logger: noopLogger,
+    })
+    const events = await collect(
+      engine.run(sampleJob({ targets: [{ lang: 'fr' }], difficulty: 'normal' })),
+    )
+    expect(events.some((e) => e.type === 'escalated')).toBe(false)
+  })
+})

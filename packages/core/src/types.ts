@@ -25,6 +25,33 @@ export interface JobOptions {
   reasoningEffort: ReasoningEffort
   glossaryScopeIds: string[]
   useMemory: boolean
+  autoEscalate: boolean
+  escalationConfidence: number
+  routing: RouterRule[]
+}
+
+export interface RouterRule {
+  domain: Domain
+  role: Role
+  model: string
+}
+
+export type DisagreementSeverity = 'low' | 'medium' | 'high'
+
+export interface Disagreement {
+  chunkIndex: number
+  sentenceIndex: number
+  variants: Partial<Record<TranslatorRole, string>>
+  similarity: number
+  severity: DisagreementSeverity
+  reasons: string[]
+}
+
+export interface Escalation {
+  chunkIndex: number | null
+  from: Difficulty
+  to: Difficulty
+  reason: string
 }
 
 export type GlossaryLevel = 'global' | 'language' | 'client' | 'project' | 'document'
@@ -296,6 +323,8 @@ export interface TargetResult {
   guidelineReport: GuidelineViolation[]
   terminologyReport: TermViolation[]
   memoryHits: MemoryHit[]
+  disagreements: Disagreement[]
+  escalations: Escalation[]
   cost: CostSummary
   trace: TraceEvent[]
   status: 'done' | 'failed' | 'cancelled'
@@ -345,6 +374,14 @@ export type ProgressEvent =
       usage: Usage
     }
   | { type: 'target-done'; lang: LanguageCode; result: TargetResult }
+  | {
+      type: 'escalated'
+      lang: LanguageCode
+      chunkIndex: number | null
+      from: Difficulty
+      to: Difficulty
+      reason: string
+    }
   | { type: 'target-failed'; lang: LanguageCode; error: string }
   | { type: 'job-done'; jobId: string; cost: CostSummary }
 

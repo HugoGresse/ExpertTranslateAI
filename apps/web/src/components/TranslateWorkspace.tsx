@@ -3,6 +3,7 @@ import type {
   GlossaryScope,
   GuidelineSet,
   JobEstimate,
+  RouterRule,
   Target,
   TranslationJob,
 } from '@experttranslate/core'
@@ -17,6 +18,7 @@ import { useModels } from '../hooks/useModels'
 import { useRepo } from '../hooks/useRepo'
 import { $run, applyProgress, idleRun } from '../stores/run'
 import {
+  $routing,
   $selectedContextIds,
   $selectedGlossaryIds,
   $selectedGuidelineIds,
@@ -42,6 +44,7 @@ interface Selection {
   guidelineSetIds: string[]
   glossaryScopeIds: string[]
   useMemory: boolean
+  routing: RouterRule[]
 }
 
 const buildJob = (
@@ -70,6 +73,9 @@ const buildJob = (
       reasoningEffort: s.reasoningEffort,
       glossaryScopeIds: selection.glossaryScopeIds,
       useMemory: selection.useMemory,
+      autoEscalate: s.autoEscalate === 'true',
+      escalationConfidence: numberSetting(s.escalationConfidence, 60),
+      routing: selection.routing,
       formality: s.formality,
       ...(s.tone ? { tone: s.tone } : {}),
       ...(s.audience ? { audience: s.audience } : {}),
@@ -88,6 +94,7 @@ export const TranslateWorkspace: FC = () => {
   const selectedGuidelineIds = useStore($selectedGuidelineIds)
   const selectedGlossaryIds = useStore($selectedGlossaryIds)
   const useMemory = useStore($useMemory) === 'true'
+  const routing = useStore($routing)
   const glossaryScopes = useRepo<GlossaryScope>(storage.glossaryScopes)
   const contexts = useRepo<ContextSource>(storage.contexts)
   const guidelines = useRepo<GuidelineSet>(storage.guidelines)
@@ -106,12 +113,14 @@ export const TranslateWorkspace: FC = () => {
         glossaryScopes.items.some((g) => g.id === id),
       ),
       useMemory,
+      routing,
     }),
     [
       selectedContextIds,
       selectedGuidelineIds,
       selectedGlossaryIds,
       useMemory,
+      routing,
       contexts.items,
       guidelines.items,
       glossaryScopes.items,

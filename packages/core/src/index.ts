@@ -25,7 +25,9 @@ export {
 export { emptyCost, findPricing, sumCosts, usageCost } from './llm/pricing.ts'
 export { LlmHttpError, LlmStreamError } from './llm/retry.ts'
 export { StreamIdleTimeoutError } from './llm/sse.ts'
+export { DIFFICULTY_ORDER, decideEscalation, nextDifficulty } from './pipeline/escalation.ts'
 export { PLANS, type Plan, planFor } from './pipeline/plan.ts'
+export { routeModels } from './pipeline/router.ts'
 export type {
   ClockPort,
   EnginePorts,
@@ -45,6 +47,12 @@ export {
   type Prompt,
   type TranslatePromptInput,
 } from './prompts/translate.ts'
+export {
+  alignSentences,
+  DISAGREEMENT_SIMILARITY,
+  detectDisagreements,
+  formatDisagreements,
+} from './scoring/disagreement.ts'
 export { calculateChunkSize, chunkText } from './text/chunk.ts'
 export { placeholderParity, protectPlaceholders, restorePlaceholders } from './text/placeholders.ts'
 export { normalizeSentence, splitSentences } from './text/sentences.ts'

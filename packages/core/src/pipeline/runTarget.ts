@@ -11,6 +11,7 @@ import {
 } from '../guidelines/format.ts'
 import { addUsage, emptyCost } from '../llm/pricing.ts'
 import type { PromptMaterials } from '../prompts/materials.ts'
+import { detectDisagreements } from '../scoring/disagreement.ts'
 import { chunkText } from '../text/chunk.ts'
 import {
   placeholderParity,
@@ -24,6 +25,8 @@ import type {
   Chunk,
   ContextSource,
   CostSummary,
+  Disagreement,
+  Escalation,
   GlossaryEntry,
   GlossaryScope,
   GuidelineSet,
@@ -31,7 +34,9 @@ import type {
   Issue,
   Judgment,
   MemoryHit,
+  QualityScore,
   Review,
+  RoleModels,
   Target,
   TargetResult,
   TermViolation,
@@ -42,7 +47,8 @@ import type {
 } from '../types.ts'
 import { AUTO_LANG } from '../types.ts'
 import type { StageContext } from './call.ts'
-import type { Plan } from './plan.ts'
+import { decideEscalation, nextDifficulty } from './escalation.ts'
+import { type Plan, planFor } from './plan.ts'
 import { finalizeChunk } from './stages/finalize.ts'
 import { checkChunkGuidelines } from './stages/guidelineCheck.ts'
 import { judgeChunk } from './stages/judge.ts'
@@ -58,6 +64,7 @@ export interface JobMaterials {
   memory: TmEntry[]
   brief: Brief | null
   trace: TraceEvent[]
+  models: RoleModels
 }
 
 interface TargetSetup {
@@ -79,6 +86,7 @@ interface ChunkOutcome {
   review: Review | null
   judgment: Judgment | null
   violations: GuidelineViolation[]
+  disagreements: Disagreement[]
   finalText: string
 }
 
@@ -167,6 +175,7 @@ async function processChunk(
   job: TranslationJob,
   plan: Plan,
   setup: TargetSetup,
+  models: RoleModels,
   chunk: Chunk,
   ctx: StageContext,
 ): Promise<ChunkOutcome> {
@@ -176,7 +185,7 @@ async function processChunk(
         {
           lang: setup.lang,
           role,
-          model: job.models[role],
+          model: models[role],
           chunk,
           prompt: {
             sourceLang: setup.sourceLang,
@@ -201,15 +210,27 @@ async function processChunk(
     materials: setup.materials,
   }
 
+  const disagreements = detectDisagreements(
+    candidates,
+    chunk.index,
+    setup.glossary.map((g) => g.source),
+  )
+  if (disagreements.length > 0)
+    ctx.logger.debug('chunk.disagreements', {
+      lang: setup.lang,
+      chunk: chunk.index,
+      count: disagreements.length,
+      high: disagreements.filter((d) => d.severity === 'high').length,
+    })
   const [review, violations] = await Promise.all([
     plan.review
-      ? reviewChunk({ ...common, model: job.models.reviewer }, ctx)
+      ? reviewChunk({ ...common, model: models.reviewer, disagreements }, ctx)
       : Promise.resolve(null),
     plan.guidelineCheck && setup.materials.guidelinesBlock
       ? checkChunkGuidelines(
           {
             ...common,
-            model: job.models.reviewer,
+            model: models.reviewer,
             guidelinesBlock: setup.materials.guidelinesBlock,
             rules: setup.rules,
           },
@@ -223,17 +244,14 @@ async function processChunk(
   )
   const allViolations = [...violations, ...termViolations]
   const judgment = plan.judge
-    ? await judgeChunk(
-        { ...common, model: job.models.judge, issues, violations: allViolations },
-        ctx,
-      )
+    ? await judgeChunk({ ...common, model: models.judge, issues, violations: allViolations }, ctx)
     : null
   const base = pickBase(candidates, review, judgment)
   const finalText = plan.finalize
     ? await finalizeChunk(
         {
           ...common,
-          model: job.models.finalizer,
+          model: models.finalizer,
           base,
           issues,
           violations: allViolations,
@@ -244,7 +262,7 @@ async function processChunk(
         ctx,
       )
     : base.text
-  return { candidates, review, judgment, violations, finalText }
+  return { candidates, review, judgment, violations, disagreements, finalText }
 }
 
 export async function runTarget(
@@ -264,9 +282,68 @@ export async function runTarget(
     placeholders,
   })
 
-  const outcomes = await Promise.all(
-    setup.chunks.map((chunk) => processChunk(job, plan, setup, chunk, ctx)),
+  const models = materials.models
+  let outcomes = await Promise.all(
+    setup.chunks.map((chunk) => processChunk(job, plan, setup, models, chunk, ctx)),
   )
+  const assemble = (list: ChunkOutcome[]): string => {
+    const joined = list.map((o) => o.finalText).join(setup.chunks.length > 1 ? '\n\n' : '')
+    return restorePlaceholders(joined, protectedSource.placeholders)
+  }
+  const escalations: Escalation[] = []
+  const firstScore = plan.score
+    ? await scoreFor(job, plan, setup, models, outcomes, assemble(outcomes), ctx)
+    : null
+  const decision = job.options.autoEscalate
+    ? decideEscalation({
+        difficulty: plan.difficulty,
+        chunkCount: setup.chunks.length,
+        disagreements: outcomes.flatMap((o) => o.disagreements),
+        score: firstScore,
+        confidenceThreshold: job.options.escalationConfidence,
+        violations: [
+          ...checkGuidelines(assemble(outcomes), setup.sets, job.sourceText),
+          ...checkTerminology(job.sourceText, assemble(outcomes), setup.glossary),
+        ],
+      })
+    : null
+  let effectivePlan = plan
+  if (decision) {
+    const to = nextDifficulty(plan.difficulty)
+    if (to) {
+      effectivePlan = planFor(to)
+      ctx.logger.info('target.escalate', {
+        lang: target.lang,
+        from: plan.difficulty,
+        to,
+        chunks: decision.chunks,
+        reason: decision.reason,
+      })
+      for (const chunkIndex of decision.chunks) {
+        escalations.push({ chunkIndex, from: plan.difficulty, to, reason: decision.reason })
+        ctx.events.emit({
+          type: 'escalated',
+          lang: target.lang,
+          chunkIndex,
+          from: plan.difficulty,
+          to,
+          reason: decision.reason,
+        })
+      }
+      const rerun = await Promise.all(
+        decision.chunks.map(async (chunkIndex) => {
+          const chunk = setup.chunks[chunkIndex]
+          if (!chunk) throw new Error(`Unknown chunk ${chunkIndex}`)
+          return [
+            chunkIndex,
+            await processChunk(job, effectivePlan, setup, models, chunk, ctx),
+          ] as const
+        }),
+      )
+      const byIndex = new Map(rerun)
+      outcomes = outcomes.map((o, i) => byIndex.get(i) ?? o)
+    }
+  }
   const candidates = outcomes.flatMap((o) => o.candidates)
   const reviews = outcomes.flatMap((o) => (o.review ? [o.review] : []))
   const judgments = outcomes.flatMap((o) => (o.judgment ? [o.judgment] : []))
@@ -274,7 +351,7 @@ export async function runTarget(
   const parity = placeholderParity(setup.protectedText, joined)
   if (parity.missing.length > 0 || parity.extra.length > 0)
     ctx.logger.warn('target.placeholderMismatch', { lang: target.lang, ...parity })
-  const finalText = restorePlaceholders(joined, protectedSource.placeholders)
+  const finalText = assemble(outcomes)
 
   const regexReport = checkGuidelines(finalText, setup.sets, job.sourceText)
   const terminologyReport = checkTerminology(job.sourceText, finalText, setup.glossary)
@@ -283,29 +360,10 @@ export async function runTarget(
       lang: target.lang,
       count: terminologyReport.length,
     })
-  const unresolved: Issue[] = reviews
-    .flatMap((r) => r.issues)
-    .filter((i) => i.severity === 'critical' && !plan.finalize)
-  const score = plan.score
-    ? await scoreTarget(
-        {
-          lang: target.lang,
-          model: job.models.scorer,
-          sourceLang: setup.sourceLang,
-          targetLabel: setup.targetLabel,
-          sourceText: job.sourceText,
-          finalText,
-          materials: setup.materials,
-          candidates,
-          unresolved: [
-            ...unresolved,
-            ...regexReport.map(violationAsIssue),
-            ...terminologyReport.map((v) => violationAsIssue(termAsGuideline(v, 'translatorA'))),
-          ],
-        },
-        ctx,
-      ).catch((error: unknown) => degrade(error, 'score', target.lang, ctx, null))
-    : null
+  const score =
+    escalations.length > 0 && effectivePlan.score
+      ? await scoreFor(job, effectivePlan, setup, models, outcomes, finalText, ctx)
+      : firstScore
   if (regexReport.length > 0)
     ctx.logger.warn('target.guidelineViolations', { lang: target.lang, count: regexReport.length })
 
@@ -318,17 +376,50 @@ export async function runTarget(
     candidates,
     finalText,
     brief: materials.brief,
-    plan: { difficulty: plan.difficulty, translators: plan.translators },
+    plan: { difficulty: effectivePlan.difficulty, translators: effectivePlan.translators },
     reviews,
     judgments,
     score,
     guidelineReport: regexReport,
     terminologyReport,
     memoryHits: setup.memoryHits,
+    disagreements: outcomes.flatMap((o) => o.disagreements),
+    escalations,
     cost,
     trace: [...materials.trace, ...ctx.trace],
     status: 'done',
   }
+}
+
+async function scoreFor(
+  job: TranslationJob,
+  plan: Plan,
+  setup: TargetSetup,
+  models: RoleModels,
+  outcomes: ChunkOutcome[],
+  finalText: string,
+  ctx: StageContext,
+): Promise<QualityScore | null> {
+  if (!plan.score) return null
+  const regexReport = checkGuidelines(finalText, setup.sets, job.sourceText)
+  const terminologyReport = checkTerminology(job.sourceText, finalText, setup.glossary)
+  return scoreTarget(
+    {
+      lang: setup.lang,
+      model: models.scorer,
+      sourceLang: setup.sourceLang,
+      targetLabel: setup.targetLabel,
+      sourceText: job.sourceText,
+      finalText,
+      materials: setup.materials,
+      candidates: outcomes.flatMap((o) => o.candidates),
+      unresolved: [
+        ...regexReport.map(violationAsIssue),
+        ...terminologyReport.map((v) => violationAsIssue(termAsGuideline(v, 'translatorA'))),
+      ],
+    },
+    ctx,
+  ).catch((error: unknown) => degrade(error, 'score', setup.lang, ctx, null))
 }
 
 function degrade<T>(

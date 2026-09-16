@@ -1,4 +1,4 @@
-import type { ReasoningEffort, RoleModels, Target } from '@experttranslate/core'
+import type { ReasoningEffort, RoleModels, RouterRule, Target } from '@experttranslate/core'
 import { persistentAtom, persistentMap } from '@nanostores/persistent'
 
 export type Settings = {
@@ -13,6 +13,8 @@ export type Settings = {
   difficulty: 'auto' | 'simple' | 'normal' | 'hard'
   budgetUsd: string
   reasoningEffort: ReasoningEffort
+  autoEscalate: 'true' | 'false'
+  escalationConfidence: string
   contextTokenBudget: string
   guidelinesTokenBudget: string
   sourceLang: string
@@ -38,6 +40,8 @@ export const $settings = persistentMap<Settings>('eta.settings.', {
   difficulty: 'auto',
   budgetUsd: '',
   reasoningEffort: 'low',
+  autoEscalate: 'true',
+  escalationConfidence: '60',
   contextTokenBudget: '4000',
   guidelinesTokenBudget: '1500',
   sourceLang: 'auto',
@@ -112,3 +116,22 @@ export const numberSetting = (raw: string, fallback: number): number => {
   const n = Number(raw)
   return Number.isFinite(n) && n > 0 ? n : fallback
 }
+
+const routingCodec = {
+  encode: (value: RouterRule[]): string => JSON.stringify(value),
+  decode: (raw: string): RouterRule[] => {
+    try {
+      const parsed: unknown = JSON.parse(raw)
+      return Array.isArray(parsed)
+        ? parsed.filter(
+            (x): x is RouterRule =>
+              typeof x === 'object' && x !== null && 'domain' in x && 'role' in x && 'model' in x,
+          )
+        : []
+    } catch {
+      return []
+    }
+  },
+}
+
+export const $routing = persistentAtom<RouterRule[]>('eta.routing', [], routingCodec)

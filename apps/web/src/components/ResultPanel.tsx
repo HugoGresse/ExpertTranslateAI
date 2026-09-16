@@ -10,7 +10,13 @@ import { storage } from '../adapters/dexieStorage'
 import { logger } from '../adapters/logger'
 import { languageName, RTL_LANGS } from '../data/languages'
 import type { TargetProgress } from '../stores/run'
-import { CandidatesCard, ReviewCard, ScoreCard, TerminologyReport } from './ResultDetails'
+import {
+  CandidatesCard,
+  DisagreementsCard,
+  ReviewCard,
+  ScoreCard,
+  TerminologyReport,
+} from './ResultDetails'
 import { Button, formatUsd } from './ui'
 
 export interface ResultPanelProps {
@@ -143,10 +149,14 @@ const FinalText: FC<{ result: TargetResult; sourceText: string; sourceLang: stri
         {result.plan.translators.length > 1 ? 's' : ''}
         {result.reviews.length > 0 ? ' · reviewed' : ''}
         {result.judgments.length > 0 ? ' · judged' : ''}
+        {result.escalations.length > 0
+          ? ` · escalated ${result.escalations[0]?.from} → ${result.escalations[0]?.to} (${result.escalations[0]?.reason})`
+          : ''}
       </p>
       {result.score ? <ScoreCard score={result.score} /> : null}
       <GuidelineReport violations={result.guidelineReport} />
       <TerminologyReport violations={result.terminologyReport} hits={result.memoryHits} />
+      <DisagreementsCard disagreements={result.disagreements} />
       {result.reviews.length > 0 ? <ReviewCard reviews={result.reviews} /> : null}
       {result.candidates.length > 1 ? <CandidatesCard result={result} /> : null}
       <TraceDrawer trace={result.trace} />

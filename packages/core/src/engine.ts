@@ -4,6 +4,7 @@ import { createBudgetTracker } from './pipeline/budget.ts'
 import type { StageContext } from './pipeline/call.ts'
 import { createEventQueue } from './pipeline/eventQueue.ts'
 import { type Plan, planFor, stageCallsPerChunk } from './pipeline/plan.ts'
+import { routeModels } from './pipeline/router.ts'
 import { type JobMaterials, runTarget } from './pipeline/runTarget.ts'
 import { runBrief } from './pipeline/stages/brief.ts'
 import type { EnginePorts, Repo } from './ports.ts'
@@ -113,11 +114,20 @@ export function createEngine(ports: EnginePorts): Engine {
           events.emit({ type: 'brief-done', brief })
         }
         const plan = resolvePlan(job, brief)
+        const models = routeModels(
+          job.models,
+          job.options.routing,
+          brief?.domain ?? (job.domain === 'auto' ? null : job.domain),
+        )
         ports.logger.info('job.plan', {
           difficulty: plan.difficulty,
           translators: plan.translators.length,
           review: plan.review,
           judge: plan.judge,
+          domain: brief?.domain ?? job.domain,
+          routed: Object.entries(models).filter(
+            ([k, v]) => job.models[k as keyof typeof job.models] !== v,
+          ).length,
         })
         return {
           materials: {
@@ -128,6 +138,7 @@ export function createEngine(ports: EnginePorts): Engine {
             memory,
             brief,
             trace,
+            models,
           },
           plan,
         }

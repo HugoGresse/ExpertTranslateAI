@@ -1,4 +1,5 @@
-import type { Candidate } from '../types.ts'
+import { formatDisagreements } from '../scoring/disagreement.ts'
+import type { Candidate, Disagreement } from '../types.ts'
 import { assembleSystem } from './assembleSystem.ts'
 import { formatCandidates, materialBlocks, type PromptMaterials } from './materials.ts'
 import type { Prompt } from './translate.ts'
@@ -9,6 +10,7 @@ export interface ReviewPromptInput {
   sourceChunk: string
   candidates: Candidate[]
   materials: PromptMaterials
+  disagreements?: Disagreement[]
 }
 
 export function buildReviewPrompt(input: ReviewPromptInput): Prompt {
@@ -29,6 +31,15 @@ export function buildReviewPrompt(input: ReviewPromptInput): Prompt {
       `<SOURCE_TEXT>\n${input.sourceChunk}\n</SOURCE_TEXT>`,
       '',
       formatCandidates(input.candidates),
+      ...(input.disagreements && input.disagreements.length > 0
+        ? [
+            '',
+            '<DISAGREEMENTS>',
+            'The candidates differ on these spans. Examine them first and say which rendering is right:',
+            formatDisagreements(input.disagreements),
+            '</DISAGREEMENTS>',
+          ]
+        : []),
     ].join('\n'),
   }
 }

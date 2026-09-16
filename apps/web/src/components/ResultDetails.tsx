@@ -1,5 +1,6 @@
 import {
   type Brief,
+  type Disagreement,
   type MemoryHit,
   type QualityScore,
   type Review,
@@ -204,3 +205,47 @@ export const TerminologyReport: FC<{ violations: TermViolation[]; hits: MemoryHi
     )}
   </div>
 )
+
+const severityTone: Record<Disagreement['severity'], string> = {
+  high: 'border-red-300 bg-red-50',
+  medium: 'border-amber-300 bg-amber-50',
+  low: 'border-neutral-200 bg-neutral-50',
+}
+
+export const DisagreementsCard: FC<{ disagreements: Disagreement[] }> = ({ disagreements }) => {
+  const [open, setOpen] = useState(false)
+  if (disagreements.length === 0) return null
+  const high = disagreements.filter((d) => d.severity === 'high').length
+  return (
+    <div className="mt-3">
+      <Button variant="ghost" onClick={() => setOpen((o) => !o)}>
+        {open
+          ? 'Hide disagreements'
+          : `Show disagreements (${disagreements.length}${high > 0 ? `, ${high} high` : ''})`}
+      </Button>
+      {open ? (
+        <ul className="mt-2 flex flex-col gap-2 text-xs">
+          {disagreements.map((d) => (
+            <li
+              key={`${d.chunkIndex}-${d.sentenceIndex}`}
+              className={`rounded-md border p-2 ${severityTone[d.severity]}`}
+            >
+              <p className="mb-1 font-medium">
+                Chunk {d.chunkIndex + 1}, sentence {d.sentenceIndex + 1} · {d.severity} ·{' '}
+                {d.reasons.join(', ')}
+              </p>
+              {Object.entries(d.variants).map(([role, text]) => (
+                <p key={role}>
+                  <span className="text-neutral-500">
+                    {role.replace('translator', 'Candidate ')}:
+                  </span>{' '}
+                  {text}
+                </p>
+              ))}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
+  )
+}

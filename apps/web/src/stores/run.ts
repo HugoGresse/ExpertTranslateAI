@@ -125,6 +125,11 @@ export function applyProgress(event: ProgressEvent): void {
     case 'target-done':
       patchTarget(event.lang, { status: 'done', result: event.result, activity: 'done' })
       return
+    case 'escalated':
+      patchTarget(event.lang, {
+        activity: `escalating ${event.from} → ${event.to}${event.chunkIndex !== null ? ` (chunk ${event.chunkIndex + 1})` : ''}: ${event.reason}`,
+      })
+      return
     case 'target-failed':
       patchTarget(event.lang, { status: 'failed', error: event.error, activity: 'failed' })
       return

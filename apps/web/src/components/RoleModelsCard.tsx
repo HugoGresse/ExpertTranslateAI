@@ -1,7 +1,8 @@
-import { useStore } from '@nanostores/react'
+import type { Domain, Role, RouterRule } from '@experttranslate/core'
+import { useStore as useAtom, useStore } from '@nanostores/react'
 import type { FC } from 'react'
 import { useModels } from '../hooks/useModels'
-import { $settings, type Settings } from '../stores/settings'
+import { $routing, $settings, type Settings } from '../stores/settings'
 import { ModelPicker } from './ModelPicker'
 import { Button, Card, Field, inputClass } from './ui'
 
@@ -82,6 +83,27 @@ export const RoleModelsCard: FC = () => {
             onChange={(e) => $settings.setKey('budgetUsd', e.target.value)}
           />
         </Field>
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={settings.autoEscalate === 'true'}
+            onChange={(e) => $settings.setKey('autoEscalate', e.target.checked ? 'true' : 'false')}
+          />
+          Auto-escalate one difficulty level on high disagreement, low confidence or rule violations
+        </label>
+        <Field
+          label="Escalate below confidence"
+          hint="0–100. Applies when candidates agree but the scorer is unsure."
+        >
+          <input
+            className={inputClass}
+            type="number"
+            min={0}
+            max={100}
+            value={settings.escalationConfidence}
+            onChange={(e) => $settings.setKey('escalationConfidence', e.target.value)}
+          />
+        </Field>
         <Field
           label="Reasoning effort"
           hint="Sent as OpenRouter reasoning.effort. Reasoning models can spend thousands of hidden tokens per call; low keeps runs fast and cheap. Ignored by models without reasoning."
@@ -114,7 +136,96 @@ export const RoleModelsCard: FC = () => {
         <Button className="self-start" onClick={refresh}>
           Refresh catalog
         </Button>
+        <RoutingTable models={models} loading={loading} />
       </div>
     </Card>
+  )
+}
+
+const DOMAINS: Domain[] = [
+  'general',
+  'legal',
+  'technical',
+  'marketing',
+  'medical',
+  'literary',
+  'ui',
+]
+const ROLE_KEYS: Role[] = [
+  'translatorA',
+  'translatorB',
+  'translatorC',
+  'reviewer',
+  'judge',
+  'finalizer',
+  'scorer',
+  'helper',
+]
+
+const RoutingTable: FC<{
+  models: Parameters<typeof ModelPicker>[0]['models']
+  loading: boolean
+}> = ({ models, loading }) => {
+  const rules = useAtom($routing)
+  const update = (index: number, patch: Partial<RouterRule>): void =>
+    $routing.set(rules.map((r, i) => (i === index ? { ...r, ...patch } : r)))
+  return (
+    <div className="mt-2">
+      <p className="text-sm font-medium text-neutral-700">Routing by domain</p>
+      <p className="mb-2 text-xs text-neutral-500">
+        After the brief detects the domain, these rules override the role models above.
+      </p>
+      <ul className="flex flex-col gap-2">
+        {rules.map((rule, i) => (
+          <li
+            key={`${rule.domain}-${rule.role}-${i}`}
+            className="grid gap-2 text-sm md:grid-cols-[120px_130px_1fr_auto]"
+          >
+            <select
+              className={inputClass}
+              value={rule.domain}
+              onChange={(e) => update(i, { domain: e.target.value as Domain })}
+              aria-label="Routing domain"
+            >
+              {DOMAINS.map((d) => (
+                <option key={d} value={d}>
+                  {d}
+                </option>
+              ))}
+            </select>
+            <select
+              className={inputClass}
+              value={rule.role}
+              onChange={(e) => update(i, { role: e.target.value as Role })}
+              aria-label="Routing role"
+            >
+              {ROLE_KEYS.map((r) => (
+                <option key={r} value={r}>
+                  {r}
+                </option>
+              ))}
+            </select>
+            <ModelPicker
+              models={models}
+              value={rule.model}
+              loading={loading}
+              allowEmpty
+              onChange={(model) => update(i, { model })}
+            />
+            <Button variant="danger" onClick={() => $routing.set(rules.filter((_, j) => j !== i))}>
+              ×
+            </Button>
+          </li>
+        ))}
+      </ul>
+      <Button
+        className="mt-2"
+        onClick={() =>
+          $routing.set([...rules, { domain: 'legal', role: 'translatorA', model: '' }])
+        }
+      >
+        Add routing rule
+      </Button>
+    </div>
   )
 }
