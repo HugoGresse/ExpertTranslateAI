@@ -12,7 +12,7 @@ describe('translate prompt', () => {
 
   it('single chunk asks for the translation only', () => {
     const prompt = buildTranslatePrompt({ ...base, chunkText: base.fullText, isMultiChunk: false })
-    expect(prompt.system).toContain('es as spoken in Mexico')
+    expect(prompt.system).toContain('Translate from English to es as spoken in Mexico.')
     expect(prompt.system).toContain('Tone: friendly.')
     expect(prompt.user).toContain('Do not provide any explanations')
     expect(prompt.user).not.toContain('<TRANSLATE_THIS>')

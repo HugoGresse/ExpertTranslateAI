@@ -15,9 +15,9 @@ export const AuthCallback: FC = () => {
     }
     exchangeCode(code)
       .then((key) => {
-        saveApiKey(key)
-        logger.info('auth.connected')
-        window.location.replace(basePath('/settings'))
+        const { replacedVault } = saveApiKey(key)
+        logger.info('auth.connected', { replacedVault })
+        window.location.replace(basePath(replacedVault ? '/settings?vaultReplaced=1' : '/settings'))
       })
       .catch((e: unknown) => {
         logger.error('auth.exchangeFailed', { error: String(e) })

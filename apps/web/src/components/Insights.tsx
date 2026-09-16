@@ -1,67 +1,18 @@
-import type { EvalRecord } from '@experttranslate/core'
+import {
+  aggregateEvals,
+  type EvalGroupKey,
+  type EvalRecord,
+  issueTotals,
+} from '@experttranslate/core'
 import { type FC, useMemo, useState } from 'react'
 import { storage } from '../adapters/dexieStorage'
+import { logger } from '../adapters/logger'
 import { useRepo } from '../hooks/useRepo'
+import { pickOneOf } from '../lib/guards'
 import { Button, Card, formatUsd, inputClass } from './ui'
 
-type GroupKey = 'translator' | 'domain' | 'lang' | 'difficulty' | 'prompts'
-
-interface Row {
-  key: string
-  runs: number
-  avgScore: number | null
-  avgConfidence: number | null
-  costPer1kWords: number
-  totalUsd: number
-  violationsPerRun: number
-  escalatedRate: number
-  humanEditRate: number
-}
-
-const keyOf = (r: EvalRecord, group: GroupKey): string => {
-  switch (group) {
-    case 'translator':
-      return r.models.translatorA
-    case 'domain':
-      return r.domain
-    case 'lang':
-      return r.lang
-    case 'difficulty':
-      return r.difficulty
-    case 'prompts':
-      return r.promptOverrideHash
-  }
-}
-
-const avg = (values: number[]): number | null =>
-  values.length === 0
-    ? null
-    : Math.round((values.reduce((a, b) => a + b, 0) / values.length) * 10) / 10
-
-export function aggregate(records: EvalRecord[], group: GroupKey): Row[] {
-  const buckets = new Map<string, EvalRecord[]>()
-  for (const r of records)
-    buckets.set(keyOf(r, group), [...(buckets.get(keyOf(r, group)) ?? []), r])
-  return [...buckets.entries()]
-    .map(([key, list]) => {
-      const scored = list.filter((r) => r.score)
-      const words = list.reduce((a, r) => a + r.words, 0)
-      const usd = list.reduce((a, r) => a + r.costUsd, 0)
-      return {
-        key,
-        runs: list.length,
-        avgScore: avg(scored.map((r) => r.score?.overall ?? 0)),
-        avgConfidence: avg(scored.map((r) => r.score?.confidence ?? 0)),
-        costPer1kWords: words > 0 ? (usd / words) * 1000 : 0,
-        totalUsd: usd,
-        violationsPerRun:
-          Math.round((list.reduce((a, r) => a + r.violations, 0) / list.length) * 10) / 10,
-        escalatedRate: Math.round((list.filter((r) => r.escalated).length / list.length) * 100),
-        humanEditRate: Math.round((list.filter((r) => r.humanEdited).length / list.length) * 100),
-      }
-    })
-    .sort((a, b) => b.runs - a.runs)
-}
+type GroupKey = EvalGroupKey
+const GROUP_KEYS = ['translator', 'domain', 'lang', 'difficulty', 'prompts'] as const
 
 const Bar: FC<{ value: number | null; max: number }> = ({ value, max }) => (
   <span className="inline-block h-2 w-24 rounded bg-neutral-100 align-middle">
@@ -75,14 +26,9 @@ const Bar: FC<{ value: number | null; max: number }> = ({ value, max }) => (
 export const Insights: FC = () => {
   const evals = useRepo<EvalRecord>(storage.evals)
   const [group, setGroup] = useState<GroupKey>('translator')
-  const rows = useMemo(() => aggregate(evals.items, group), [evals.items, group])
-  const issueTotals = useMemo(() => {
-    const totals: Record<string, number> = {}
-    for (const r of evals.items)
-      for (const [k, v] of Object.entries(r.issueCounts)) totals[k] = (totals[k] ?? 0) + v
-    return Object.entries(totals).sort(([, a], [, b]) => b - a)
-  }, [evals.items])
-  const maxIssue = issueTotals[0]?.[1] ?? 0
+  const rows = useMemo(() => aggregateEvals(evals.items, group), [evals.items, group])
+  const totals = useMemo(() => issueTotals(evals.items), [evals.items])
+  const maxIssue = totals[0]?.[1] ?? 0
 
   return (
     <div className="flex flex-col gap-4">
@@ -92,7 +38,7 @@ export const Insights: FC = () => {
           <select
             className={inputClass}
             value={group}
-            onChange={(e) => setGroup(e.target.value as GroupKey)}
+            onChange={(e) => setGroup(pickOneOf(GROUP_KEYS, e.target.value, 'translator'))}
             aria-label="Group by"
           >
             <option value="translator">translator model</option>
@@ -151,10 +97,10 @@ export const Insights: FC = () => {
           </div>
         ) : null}
       </Card>
-      {issueTotals.length > 0 ? (
+      {totals.length > 0 ? (
         <Card title="Reviewer issue categories">
           <ul className="flex flex-col gap-1 text-sm">
-            {issueTotals.map(([k, v]) => (
+            {totals.map(([k, v]) => (
               <li key={k} className="flex items-center gap-2">
                 <span className="w-28 text-neutral-600">{k}</span>
                 <Bar value={v} max={maxIssue} />
@@ -169,6 +115,11 @@ export const Insights: FC = () => {
 }
 
 async function clearAll(items: EvalRecord[], reload: () => Promise<void>): Promise<void> {
-  for (const r of items) await storage.evals.delete(r.id)
+  try {
+    for (const r of items) await storage.evals.delete(r.id)
+    logger.info('insights.cleared', { count: items.length })
+  } catch (error) {
+    logger.error('insights.clearFailed', { error: String(error) })
+  }
   await reload()
 }

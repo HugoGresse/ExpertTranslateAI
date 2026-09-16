@@ -110,7 +110,7 @@ export function createEngine(ports: EnginePorts): Engine {
               sourceText: briefSource(job.sourceText),
               sourceLangHint: job.sourceLang === AUTO_LANG ? 'unknown, detect it' : job.sourceLang,
               targetLangs: job.targets.map((t) => t.lang),
-              materials: { brief: null },
+              materials: { brief: null, overrides: job.options.promptOverrides },
             },
             ctx,
           )
@@ -121,7 +121,7 @@ export function createEngine(ports: EnginePorts): Engine {
         ports.logger.info('job.plan', {
           difficulty: plan.difficulty,
           translators: plan.translators.length,
-          review: plan.review,
+          reviewers: plan.reviewers,
           judge: plan.judge,
           domain: brief?.domain ?? job.domain,
           routed: Object.entries(models).filter(
@@ -176,10 +176,17 @@ export function createEngine(ports: EnginePorts): Engine {
                 targetCtx,
               )
               await ports.storage.results.put(result)
-              await ports.storage.evals.put(
-                buildEvalRecord(job, prepared.materials.models, result, ports.clock.now()),
-              )
               events.emit({ type: 'target-done', lang: target.lang, result })
+              try {
+                await ports.storage.evals.put(
+                  buildEvalRecord(job, prepared.materials.models, result, ports.clock.now()),
+                )
+              } catch (error) {
+                ports.logger.warn('eval.putFailed', {
+                  lang: target.lang,
+                  error: errorMessage(error),
+                })
+              }
               return result
             } catch (error) {
               const status = isAbort(error) ? 'cancelled' : 'failed'
@@ -219,7 +226,8 @@ export function createEngine(ports: EnginePorts): Engine {
       const callCount =
         chunkCount * perChunk * job.targets.length +
         (needsBrief(job) ? 1 : 0) +
-        (plan.score ? job.targets.length : 0)
+        (plan.score ? job.targets.length : 0) +
+        (plan.backTranslate || job.options.backTranslate ? 2 * job.targets.length : 0)
       const contextTokens = sources
         .filter((s) => isRelevantSource(s, job) && job.options.contextSourceIds.includes(s.id))
         .reduce(

@@ -2,7 +2,9 @@
 
 exports[`translate prompt > matches snapshot 1`] = `
 {
-  "system": "You are an expert linguist, specializing in translation from English to es as spoken in Mexico.
+  "system": "You are an expert linguist producing professional, faithful, natural translations.
+
+Translate from English to es as spoken in Mexico.
 
 Tone: friendly.
 Preserve Markdown structure, line breaks, lists and inline formatting exactly.

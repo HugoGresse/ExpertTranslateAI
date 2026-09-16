@@ -365,6 +365,8 @@ export interface TraceEvent {
 export interface TargetResult {
   jobId: string
   lang: LanguageCode
+  region?: string
+  targetKey: string
   sourceText: string
   sourceLang: LanguageCode | null
   chunks: Chunk[]

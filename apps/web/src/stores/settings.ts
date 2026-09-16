@@ -1,11 +1,13 @@
 import type {
   Domain,
   PromptOverrides,
+  PromptStage,
   ReasoningEffort,
   RoleModels,
   RouterRule,
   Target,
 } from '@experttranslate/core'
+import { PROMPT_STAGES } from '@experttranslate/core'
 import { persistentAtom, persistentMap } from '@nanostores/persistent'
 
 export type Settings = {
@@ -142,15 +144,18 @@ const routingCodec = {
 
 export const $routing = persistentAtom<RouterRule[]>('eta.routing', [], routingCodec)
 
+const isPromptStage = (k: string): k is PromptStage => (PROMPT_STAGES as string[]).includes(k)
+
 const overridesCodec = {
   encode: (value: PromptOverrides): string => JSON.stringify(value),
   decode: (raw: string): PromptOverrides => {
     try {
       const parsed: unknown = JSON.parse(raw)
       if (!isRecord(parsed)) return {}
-      const out: Record<string, string> = {}
-      for (const [k, v] of Object.entries(parsed)) if (typeof v === 'string') out[k] = v
-      return out as PromptOverrides
+      const out: PromptOverrides = {}
+      for (const [k, v] of Object.entries(parsed))
+        if (typeof v === 'string' && isPromptStage(k)) out[k] = v
+      return out
     } catch {
       return {}
     }

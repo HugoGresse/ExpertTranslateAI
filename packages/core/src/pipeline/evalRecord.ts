@@ -23,7 +23,7 @@ export function buildEvalRecord(
   for (const r of result.reviews)
     for (const i of r.issues) issueCounts[i.category] = (issueCounts[i.category] ?? 0) + 1
   return {
-    id: `${result.jobId}:${result.lang}`,
+    id: `${result.jobId}:${result.targetKey}`,
     jobId: result.jobId,
     lang: result.lang,
     createdAt: now,

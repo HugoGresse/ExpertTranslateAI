@@ -1,15 +1,4 @@
-import {
-  buildBackTranslatePrompt,
-  buildBriefPrompt,
-  buildDeltaPrompt,
-  buildFinalizePrompt,
-  buildGuidelineCheckPrompt,
-  buildJudgePrompt,
-  buildReviewPrompt,
-  buildScorePrompt,
-  buildTranslatePrompt,
-  type PromptStage,
-} from '@experttranslate/core'
+import { DEFAULT_ROLE_LINES, type PromptStage } from '@experttranslate/core'
 import { useStore } from '@nanostores/react'
 import { type FC, useMemo } from 'react'
 import { $promptOverrides } from '../stores/settings'
@@ -51,74 +40,11 @@ const STAGES: Array<{ stage: PromptStage; label: string; hint: string }> = [
   },
 ]
 
-const sample = {
-  sourceLang: 'en',
-  targetLabel: 'fr',
-  target: { lang: 'fr' },
-  materials: {},
-  candidates: [],
-  issues: [],
-  violations: [],
-  suggestions: [],
-}
-
-function defaultRole(stage: PromptStage): string {
-  const system = ((): string => {
-    switch (stage) {
-      case 'brief':
-        return buildBriefPrompt({
-          sourceText: '',
-          sourceLangHint: 'en',
-          targetLangs: ['fr'],
-          materials: {},
-        }).system
-      case 'translate':
-        return buildTranslatePrompt({
-          ...sample,
-          options: { preserveFormatting: true },
-          fullText: '',
-          chunkText: '',
-          isMultiChunk: false,
-        }).system
-      case 'review':
-        return buildReviewPrompt({ ...sample, sourceChunk: '' }).system
-      case 'guidelines':
-        return buildGuidelineCheckPrompt({
-          ...sample,
-          sourceChunk: '',
-          guidelinesBlock: '<GUIDELINES>\n</GUIDELINES>',
-        }).system
-      case 'judge':
-        return buildJudgePrompt({ ...sample, sourceChunk: '' }).system
-      case 'finalize':
-        return buildFinalizePrompt({
-          ...sample,
-          sourceChunk: '',
-          base: { role: 'translatorA', text: '' },
-          judgment: null,
-          preserveFormatting: true,
-        }).system
-      case 'score':
-        return buildScorePrompt({ ...sample, sourceText: '', finalText: '' }).system
-      case 'backtranslate':
-        return buildBackTranslatePrompt({ ...sample, finalText: '' }).system
-      case 'deltas':
-        return buildDeltaPrompt({ ...sample, sourceText: '', backText: '' }).system
-    }
-  })()
-  return system.split('\n\n')[0] ?? system
-}
+const defaultRole = (stage: PromptStage): string => DEFAULT_ROLE_LINES[stage].join('\n')
 
 export const PromptsManager: FC = () => {
   const overrides = useStore($promptOverrides)
-  const defaults = useMemo(
-    () =>
-      Object.fromEntries(STAGES.map((s) => [s.stage, defaultRole(s.stage)])) as Record<
-        PromptStage,
-        string
-      >,
-    [],
-  )
+  const defaults = useMemo(() => new Map(STAGES.map((s) => [s.stage, defaultRole(s.stage)])), [])
   const set = (stage: PromptStage, value: string): void => {
     const next = { ...overrides }
     if (value.trim()) next[stage] = value
@@ -142,7 +68,7 @@ export const PromptsManager: FC = () => {
             <p className="mb-2 text-xs text-neutral-500">{s.hint}</p>
             <textarea
               className={`${inputClass} min-h-32 w-full font-mono text-xs`}
-              value={overrides[s.stage] ?? defaults[s.stage]}
+              value={overrides[s.stage] ?? defaults.get(s.stage) ?? ''}
               onChange={(e) => set(s.stage, e.target.value)}
               aria-label={`${s.label} prompt`}
             />

@@ -27,20 +27,15 @@ export interface FinalizePromptInput {
 export function buildFinalizePrompt(input: FinalizePromptInput): Prompt {
   return {
     system: assembleSystem({
-      role: roleLines(
-        input.materials,
-        'finalize',
-        [
-          `You are the final editor producing the definitive ${input.targetLabel} translation of a ${input.sourceLang} text.`,
-          'Start from the BASE text. Apply every fix from the review and the guideline audit that is correct. Use the other candidates only to borrow better wording where the review points to a problem.',
-          'Keep meaning complete: nothing omitted, nothing added. Keep terminology consistent with the key terms, context and guidelines.',
-          input.preserveFormatting
-            ? 'Preserve Markdown structure, line breaks, lists and inline formatting exactly.'
-            : '',
-          'Never translate or alter tokens of the form ⟦PHn⟧; keep every one of them in place.',
-          'Output only the final translated text. No explanations, no quotes, no labels.',
-        ].filter((l) => l.length > 0),
-      ),
+      role: roleLines(input.materials, 'finalize'),
+      contract: [
+        `Language pair: ${input.sourceLang} → ${input.targetLabel}.`,
+        input.preserveFormatting
+          ? 'Preserve Markdown structure, line breaks, lists and inline formatting exactly.'
+          : '',
+        'Never translate or alter tokens of the form ⟦PHn⟧; keep every one of them in place.',
+        'Output only the final translated text. No explanations, no quotes, no labels.',
+      ].filter((l) => l.length > 0),
       ...materialBlocks(input.materials),
     }),
     user: [

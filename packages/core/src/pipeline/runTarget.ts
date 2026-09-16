@@ -14,6 +14,7 @@ import { type Plan, planFor } from './plan.ts'
 import { type ChunkOutcome, processChunk } from './processChunk.ts'
 import { type JobMaterials, setupTarget, type TargetSetup } from './setupTarget.ts'
 import { backTranslateTarget } from './stages/backTranslate.ts'
+import { targetKey } from './targetKey.ts'
 import { degrade, isAbort } from './violations.ts'
 
 export type { JobMaterials } from './setupTarget.ts'
@@ -139,6 +140,8 @@ export async function runTarget(
   return {
     jobId: job.id,
     lang: target.lang,
+    ...(target.region ? { region: target.region } : {}),
+    targetKey: targetKey(target),
     sourceText: job.sourceText,
     sourceLang: setup.resolvedSourceLang,
     chunks: setup.chunks,

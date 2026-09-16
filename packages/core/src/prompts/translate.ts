@@ -35,9 +35,8 @@ function styleLines(options: TranslatePromptInput['options']): string[] {
 
 export function translateSystemPrompt(input: TranslatePromptInput): string {
   return assembleSystem({
-    role: roleLines(input.materials, 'translate', [
-      `You are an expert linguist, specializing in translation from ${input.sourceLang} to ${targetLabel(input.target)}.`,
-    ]),
+    role: roleLines(input.materials, 'translate'),
+    contract: [`Translate from ${input.sourceLang} to ${targetLabel(input.target)}.`],
     ...materialBlocks(input.materials),
     task: styleLines(input.options),
   })

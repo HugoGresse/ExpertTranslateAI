@@ -1,9 +1,11 @@
 import {
   type GuidelineViolation,
   learnCorrections,
+  markHumanEdit,
   restorePlaceholders,
   type TargetResult,
   type TraceEvent,
+  wordEditDistance,
 } from '@experttranslate/core'
 import { type FC, useEffect, useState } from 'react'
 import { storage } from '../adapters/dexieStorage'
@@ -229,29 +231,9 @@ export const ResultPanel: FC<ResultPanelProps> = ({ targets }) => {
 }
 
 async function markHumanEdited(result: TargetResult, edited: string): Promise<void> {
-  const record = await storage.evals.get(`${result.jobId}:${result.lang}`)
+  const record = await storage.evals.get(`${result.jobId}:${result.targetKey}`)
   if (!record) return
-  const distance = editDistance(result.finalText, edited)
-  await storage.evals.put({ ...record, humanEdited: distance > 0, editDistance: distance })
-}
-
-function editDistance(a: string, b: string): number {
-  const wa = a.split(/\s+/)
-  const wb = b.split(/\s+/)
-  const prev = new Array<number>(wb.length + 1)
-  for (let j = 0; j <= wb.length; j++) prev[j] = j
-  for (let i = 1; i <= wa.length; i++) {
-    let diag = prev[0] ?? 0
-    prev[0] = i
-    for (let j = 1; j <= wb.length; j++) {
-      const tmp = prev[j] ?? 0
-      prev[j] = Math.min(
-        (prev[j] ?? 0) + 1,
-        (prev[j - 1] ?? 0) + 1,
-        diag + (wa[i - 1] === wb[j - 1] ? 0 : 1),
-      )
-      diag = tmp
-    }
-  }
-  return prev[wb.length] ?? 0
+  await storage.evals.put(
+    markHumanEdit(record, result.finalText, edited, wordEditDistance(result.finalText, edited)),
+  )
 }

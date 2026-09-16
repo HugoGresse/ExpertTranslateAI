@@ -47,13 +47,12 @@ function pickBase(
 function mergeReviews(reviews: Review[]): Review | null {
   const first = reviews[0]
   if (!first) return null
-  if (reviews.length === 1) return first
   return {
     chunkIndex: first.chunkIndex,
     model: reviews.map((r) => r.model).join('+'),
     issues: reviews.flatMap((r) => r.issues),
     suggestions: reviews.flatMap((r) => r.suggestions),
-    preferred: first.preferred ?? reviews.find((r) => r.preferred)?.preferred ?? null,
+    preferred: reviews.find((r) => r.preferred)?.preferred ?? null,
   }
 }
 
@@ -104,7 +103,13 @@ export async function processChunk(
       count: disagreements.length,
       high: disagreements.filter((d) => d.severity === 'high').length,
     })
-  const reviewerModels = [models.reviewer, models.judge].slice(0, plan.reviewers)
+  const reviewerModels = [...new Set([models.reviewer, models.judge])].slice(0, plan.reviewers)
+  if (plan.reviewers > reviewerModels.length)
+    ctx.logger.debug('chunk.reviewersDeduped', {
+      lang: setup.lang,
+      requested: plan.reviewers,
+      distinct: reviewerModels.length,
+    })
   const [reviews, violations] = await Promise.all([
     Promise.all(
       reviewerModels.map((model) =>

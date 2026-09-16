@@ -8,6 +8,13 @@ export {
   truncateToTokens,
 } from './context/prepare.ts'
 export { createEngine, type Engine } from './engine.ts'
+export {
+  aggregateEvals,
+  type EvalGroupKey,
+  type EvalRow,
+  issueTotals,
+  markHumanEdit,
+} from './eval/aggregate.ts'
 export { checkTerminology, glossaryTargetTerms, termRe } from './glossary/check.ts'
 export { formatGlossaryBlock } from './glossary/format.ts'
 export { expandScopeIds, resolveGlossary } from './glossary/resolve.ts'
@@ -30,6 +37,7 @@ export { buildEvalRecord, promptOverrideHash, wordCount } from './pipeline/evalR
 export { PLANS, type Plan, planFor } from './pipeline/plan.ts'
 export { routeModels } from './pipeline/router.ts'
 export { resolveSourceLang } from './pipeline/setupTarget.ts'
+export { resultKey, targetKey } from './pipeline/targetKey.ts'
 export type {
   ClockPort,
   EnginePorts,
@@ -51,6 +59,7 @@ export { buildGuidelineCheckPrompt } from './prompts/guidelineCheck.ts'
 export { buildJudgePrompt } from './prompts/judge.ts'
 export { roleLabel, roleLines } from './prompts/materials.ts'
 export { buildReviewPrompt } from './prompts/review.ts'
+export { DEFAULT_ROLE_LINES, PROMPT_STAGES } from './prompts/roles.ts'
 export { buildScorePrompt } from './prompts/score.ts'
 export {
   buildTranslatePrompt,
@@ -64,6 +73,7 @@ export {
   formatDisagreements,
 } from './scoring/disagreement.ts'
 export { calculateChunkSize, chunkText } from './text/chunk.ts'
+export { wordEditDistance } from './text/editDistance.ts'
 export { placeholderParity, protectPlaceholders, restorePlaceholders } from './text/placeholders.ts'
 export { normalizeSentence, splitSentences } from './text/sentences.ts'
 export { escapeRe, wholeTermRe } from './text/terms.ts'

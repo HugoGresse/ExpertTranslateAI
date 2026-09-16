@@ -12,6 +12,7 @@ import type {
   TranslationJob,
 } from '@experttranslate/core'
 import Dexie, { type EntityTable } from 'dexie'
+import { logger } from './logger'
 
 export interface ModelCache {
   id: 'catalog'
@@ -74,7 +75,7 @@ function tableRepo<T extends { id: string; createdAt: number }>(table: RepoTable
 
 export const db = new EtaDatabase()
 
-const resultKey = (jobId: string, lang: string): string => `${jobId}:${lang}`
+const resultKey = (jobId: string, key: string): string => `${jobId}:${key}`
 
 export function createDexieStorage(database: EtaDatabase = db): StoragePort {
   return {
@@ -89,9 +90,9 @@ export function createDexieStorage(database: EtaDatabase = db): StoragePort {
       },
     },
     results: {
-      get: (jobId, lang) => database.results.get(resultKey(jobId, lang)),
+      get: (jobId, key) => database.results.get(resultKey(jobId, key)),
       put: async (result) => {
-        await database.results.put({ ...result, key: resultKey(result.jobId, result.lang) })
+        await database.results.put({ ...result, key: resultKey(result.jobId, result.targetKey) })
       },
       listByJob: (jobId) => database.results.where('jobId').equals(jobId).toArray(),
       deleteByJob: async (jobId) => {
@@ -109,53 +110,57 @@ export function createDexieStorage(database: EtaDatabase = db): StoragePort {
 
 export const storage: StoragePort = createDexieStorage()
 
-export const ALL_TABLES = [
-  'jobs',
-  'results',
-  'contextSources',
-  'guidelineSets',
-  'glossaryScopes',
-  'glossaryEntries',
-  'tm',
-  'evals',
-] as const
-export type ExportTable = (typeof ALL_TABLES)[number]
-
 export interface ExportBundle {
   version: 1
   exportedAt: number
-  tables: Record<ExportTable, unknown[]>
+  tables: Record<string, unknown[]>
   settings: Record<string, string>
 }
 
+const EXPORTABLE_SETTING_PREFIXES = [
+  'eta.settings.',
+  'eta.targets',
+  'eta.routing',
+  'eta.promptOverrides',
+  'eta.selected',
+  'eta.useMemory',
+  'eta.sourceDraft',
+]
+const isExportableSetting = (key: string): boolean =>
+  EXPORTABLE_SETTING_PREFIXES.some((p) => key.startsWith(p)) && !key.includes('openrouter')
+
 export async function exportAll(database: EtaDatabase = db): Promise<ExportBundle> {
-  const tables = {} as Record<ExportTable, unknown[]>
-  for (const name of ALL_TABLES) tables[name] = await database.table(name).toArray()
+  const tables: Record<string, unknown[]> = {}
+  for (const table of database.tables) tables[table.name] = await table.toArray()
   const settings: Record<string, string> = {}
   for (let i = 0; i < localStorage.length; i++) {
     const key = localStorage.key(i)
-    if (key?.startsWith('eta.') && !key.includes('openrouter'))
-      settings[key] = localStorage.getItem(key) ?? ''
+    if (key && isExportableSetting(key)) settings[key] = localStorage.getItem(key) ?? ''
   }
+  logger.info('data.exported', {
+    tables: Object.keys(tables).length,
+    settings: Object.keys(settings).length,
+  })
   return { version: 1, exportedAt: Date.now(), tables, settings }
 }
 
+const isRow = (row: unknown): row is Record<string, unknown> =>
+  typeof row === 'object' && row !== null
+
 export async function importAll(bundle: ExportBundle, database: EtaDatabase = db): Promise<number> {
   let count = 0
-  await database.transaction(
-    'rw',
-    ALL_TABLES.map((n) => database.table(n)),
-    async () => {
-      for (const name of ALL_TABLES) {
-        const rows = bundle.tables[name] ?? []
-        if (rows.length === 0) continue
-        await database.table(name).bulkPut(rows)
-        count += rows.length
-      }
-    },
-  )
+  const known = database.tables.filter((t) => Array.isArray(bundle.tables[t.name]))
+  await database.transaction('rw', known, async () => {
+    for (const table of known) {
+      const rows = (bundle.tables[table.name] ?? []).filter(isRow)
+      if (rows.length === 0) continue
+      await table.bulkPut(rows)
+      logger.debug('data.importTable', { table: table.name, rows: rows.length })
+      count += rows.length
+    }
+  })
   for (const [key, value] of Object.entries(bundle.settings ?? {})) {
-    if (key.startsWith('eta.') && !key.includes('openrouter')) localStorage.setItem(key, value)
+    if (isExportableSetting(key) && typeof value === 'string') localStorage.setItem(key, value)
   }
   return count
 }

@@ -3,6 +3,23 @@ import { logger } from './logger'
 
 const PLAIN_KEY = 'eta.openrouter.key'
 const ENC_KEY = 'eta.openrouter.key.enc'
+const SESSION_KEY = 'eta.openrouter.key.session'
+
+const readSession = (): string | null => {
+  try {
+    return sessionStorage.getItem(SESSION_KEY)
+  } catch {
+    return null
+  }
+}
+const writeSession = (value: string | null): void => {
+  try {
+    if (value === null) sessionStorage.removeItem(SESSION_KEY)
+    else sessionStorage.setItem(SESSION_KEY, value)
+  } catch {
+    /* session storage unavailable */
+  }
+}
 
 interface EncryptedBlob {
   salt: string
@@ -89,28 +106,36 @@ const readEncrypted = (): EncryptedBlob | null => {
   return null
 }
 
-export const $apiKey = atom<string | null>(
-  typeof localStorage === 'undefined' ? null : read(PLAIN_KEY),
-)
+const initialPlain = typeof localStorage === 'undefined' ? null : read(PLAIN_KEY)
+const initialBlob = typeof localStorage === 'undefined' ? null : readEncrypted()
+const initialSession = initialBlob && typeof sessionStorage !== 'undefined' ? readSession() : null
+
+export const $apiKey = atom<string | null>(initialPlain ?? initialSession)
+export const $keyEncrypted = atom<boolean>(initialBlob !== null)
 export const $keyLocked = atom<boolean>(
-  typeof localStorage === 'undefined'
-    ? false
-    : readEncrypted() !== null && read(PLAIN_KEY) === null,
+  initialBlob !== null && initialPlain === null && initialSession === null,
 )
 
-export const isKeyEncrypted = (): boolean => readEncrypted() !== null
+export const isKeyEncrypted = (): boolean => $keyEncrypted.get()
 
-export function saveApiKey(key: string): void {
+export function saveApiKey(key: string): { replacedVault: boolean } {
+  const replacedVault = readEncrypted() !== null
+  if (replacedVault) logger.warn('keyVault.replaced', { encrypted: true })
   localStorage.setItem(PLAIN_KEY, key.trim())
   localStorage.removeItem(ENC_KEY)
+  writeSession(null)
   $apiKey.set(key.trim())
+  $keyEncrypted.set(false)
   $keyLocked.set(false)
+  return { replacedVault }
 }
 
 export function forgetApiKey(): void {
   localStorage.removeItem(PLAIN_KEY)
   localStorage.removeItem(ENC_KEY)
+  writeSession(null)
   $apiKey.set(null)
+  $keyEncrypted.set(false)
   $keyLocked.set(false)
 }
 
@@ -120,6 +145,9 @@ export async function protectApiKey(passphrase: string): Promise<void> {
   const blob = await encryptKey(key, passphrase)
   localStorage.setItem(ENC_KEY, JSON.stringify(blob))
   localStorage.removeItem(PLAIN_KEY)
+  writeSession(key)
+  $keyEncrypted.set(true)
+  $keyLocked.set(false)
   logger.info('keyVault.protected')
 }
 
@@ -128,19 +156,35 @@ export async function unlockApiKey(passphrase: string): Promise<void> {
   if (!blob) throw new Error('No encrypted key stored')
   try {
     const key = await decryptKey(blob, passphrase)
+    writeSession(key)
     $apiKey.set(key)
     $keyLocked.set(false)
     logger.info('keyVault.unlocked')
-  } catch {
-    throw new Error('Wrong passphrase')
+  } catch (error) {
+    logger.warn('keyVault.unlockFailed', {
+      error: error instanceof Error ? error.name : String(error),
+    })
+    throw new Error('Wrong passphrase or corrupted key store')
   }
 }
 
 export async function unprotectApiKey(): Promise<void> {
   const key = $apiKey.get()
   if (!key) throw new Error('Unlock the key first')
-  saveApiKey(key)
+  localStorage.setItem(PLAIN_KEY, key)
+  localStorage.removeItem(ENC_KEY)
+  writeSession(null)
+  $keyEncrypted.set(false)
+  $keyLocked.set(false)
   logger.info('keyVault.unprotected')
+}
+
+export function lockApiKey(): void {
+  if (!$keyEncrypted.get()) return
+  writeSession(null)
+  $apiKey.set(null)
+  $keyLocked.set(true)
+  logger.info('keyVault.locked')
 }
 
 export const maskKey = (key: string): string =>

@@ -1,5 +1,6 @@
 export interface SystemBlocks {
   role: string[]
+  contract?: string[]
   brief?: string
   context?: string
   guidelines?: string
@@ -10,6 +11,7 @@ export interface SystemBlocks {
 
 export function assembleSystem(blocks: SystemBlocks): string {
   const parts: string[] = [blocks.role.join('\n')]
+  if (blocks.contract && blocks.contract.length > 0) parts.push(blocks.contract.join('\n'))
   const ordered: Array<[string | undefined, string]> = [
     [blocks.brief, 'Background brief for this document:'],
     [

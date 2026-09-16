@@ -3,7 +3,6 @@ import type { Difficulty, TranslatorRole } from '../types.ts'
 export interface Plan {
   difficulty: Difficulty
   translators: TranslatorRole[]
-  review: boolean
   reviewers: number
   guidelineCheck: boolean
   judge: boolean
@@ -16,7 +15,6 @@ export const PLANS: Record<Difficulty, Plan> = {
   simple: {
     difficulty: 'simple',
     translators: ['translatorA'],
-    review: false,
     reviewers: 0,
     guidelineCheck: false,
     judge: false,
@@ -27,7 +25,6 @@ export const PLANS: Record<Difficulty, Plan> = {
   normal: {
     difficulty: 'normal',
     translators: ['translatorA', 'translatorB'],
-    review: true,
     reviewers: 1,
     guidelineCheck: true,
     judge: false,
@@ -38,7 +35,6 @@ export const PLANS: Record<Difficulty, Plan> = {
   hard: {
     difficulty: 'hard',
     translators: ['translatorA', 'translatorB', 'translatorC'],
-    review: true,
     reviewers: 1,
     guidelineCheck: true,
     judge: true,
@@ -49,7 +45,6 @@ export const PLANS: Record<Difficulty, Plan> = {
   critical: {
     difficulty: 'critical',
     translators: ['translatorA', 'translatorB', 'translatorC'],
-    review: true,
     reviewers: 2,
     guidelineCheck: true,
     judge: true,

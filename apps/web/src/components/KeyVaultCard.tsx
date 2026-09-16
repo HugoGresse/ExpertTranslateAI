@@ -2,8 +2,9 @@ import { useStore } from '@nanostores/react'
 import { type FC, useState } from 'react'
 import {
   $apiKey,
+  $keyEncrypted,
   $keyLocked,
-  isKeyEncrypted,
+  lockApiKey,
   protectApiKey,
   unlockApiKey,
   unprotectApiKey,
@@ -20,7 +21,6 @@ export const UnlockForm: FC = () => {
       setPassphrase('')
       setError(null)
     } catch (e) {
-      logger.warn('keyVault.unlockFailed')
       setError(e instanceof Error ? e.message : String(e))
     }
   }
@@ -54,7 +54,7 @@ export const KeyVaultCard: FC = () => {
   const locked = useStore($keyLocked)
   const [passphrase, setPassphrase] = useState('')
   const [status, setStatus] = useState<string | null>(null)
-  const encrypted = isKeyEncrypted()
+  const encrypted = useStore($keyEncrypted)
   if (locked) return <UnlockForm />
   if (!apiKey) return null
   const protect = async (): Promise<void> => {
@@ -62,9 +62,18 @@ export const KeyVaultCard: FC = () => {
       setStatus('Use at least 8 characters.')
       return
     }
-    await protectApiKey(passphrase)
-    setPassphrase('')
-    setStatus('Key encrypted. You will be asked for the passphrase after each reload.')
+    try {
+      await protectApiKey(passphrase)
+      setPassphrase('')
+      setStatus(
+        'Key encrypted. You will be asked for the passphrase when the browser session ends.',
+      )
+    } catch (error) {
+      logger.error('keyVault.protectFailed', {
+        error: error instanceof Error ? error.name : String(error),
+      })
+      setStatus('Could not encrypt. Encryption needs a secure page (https or localhost).')
+    }
   }
   return (
     <div className="mt-3 flex flex-col gap-2 text-sm">
@@ -73,13 +82,17 @@ export const KeyVaultCard: FC = () => {
           <span className="text-green-700">Encrypted at rest (AES-GCM, passphrase-derived).</span>
           <Button
             onClick={() =>
-              void unprotectApiKey().then(() =>
-                setStatus('Key stored in plain local storage again.'),
-              )
+              void unprotectApiKey()
+                .then(() => setStatus('Key stored in plain local storage again.'))
+                .catch((error: unknown) => {
+                  logger.error('keyVault.unprotectFailed', { error: String(error) })
+                  setStatus('Could not remove encryption.')
+                })
             }
           >
             Store unencrypted
           </Button>
+          <Button onClick={lockApiKey}>Lock now</Button>
         </div>
       ) : (
         <Field

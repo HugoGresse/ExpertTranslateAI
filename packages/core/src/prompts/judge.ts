@@ -23,14 +23,13 @@ export interface JudgePromptInput {
 export function buildJudgePrompt(input: JudgePromptInput): Prompt {
   return {
     system: assembleSystem({
-      role: roleLines(input.materials, 'judge', [
-        `You are the senior editor deciding between ${input.sourceLang} to ${input.targetLabel} candidate translations.`,
-        'You receive the source, the candidates and the findings of a reviewer and a guideline audit.',
-        'Decide which candidate is the best base. If no single candidate is clearly best, answer "merge" and provide the merged text that takes the best sentence from each candidate while fixing the reported issues.',
+      role: roleLines(input.materials, 'judge'),
+      contract: [
+        `Language pair: ${input.sourceLang} → ${input.targetLabel}.`,
         'Answer with a single JSON object, nothing else:',
         '{"winner": "translatorA"|"translatorB"|"translatorC"|"merge", "rationale": two or three sentences, "mergedText"?: full text, required when winner is "merge"}',
         'Never translate or alter tokens of the form ⟦PHn⟧.',
-      ]),
+      ],
       ...materialBlocks(input.materials),
     }),
     user: [

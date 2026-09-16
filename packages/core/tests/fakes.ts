@@ -60,7 +60,7 @@ function memoryResults(): ResultRepo {
   return {
     get: (jobId, lang) => Promise.resolve(map.get(key(jobId, lang))),
     put: (r) => {
-      map.set(key(r.jobId, r.lang), r)
+      map.set(key(r.jobId, r.targetKey), r)
       return Promise.resolve()
     },
     listByJob: (jobId) => Promise.resolve([...map.values()].filter((r) => r.jobId === jobId)),

@@ -28,7 +28,7 @@ export interface Repo<T extends { id: string }> {
 }
 
 export interface ResultRepo {
-  get(jobId: string, lang: string): Promise<TargetResult | undefined>
+  get(jobId: string, targetKey: string): Promise<TargetResult | undefined>
   put(result: TargetResult): Promise<void>
   listByJob(jobId: string): Promise<TargetResult[]>
   deleteByJob(jobId: string): Promise<void>

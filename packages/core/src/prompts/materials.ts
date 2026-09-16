@@ -7,6 +7,7 @@ import type {
   PromptStage,
   TranslatorRole,
 } from '../types.ts'
+import { DEFAULT_ROLE_LINES } from './roles.ts'
 
 export interface PromptMaterials {
   contextBlock?: string
@@ -17,13 +18,9 @@ export interface PromptMaterials {
   overrides?: PromptOverrides
 }
 
-export function roleLines(
-  m: PromptMaterials | undefined,
-  stage: PromptStage,
-  defaults: string[],
-): string[] {
+export function roleLines(m: PromptMaterials | undefined, stage: PromptStage): string[] {
   const override = m?.overrides?.[stage]?.trim()
-  return override ? override.split('\n') : defaults
+  return override ? override.split('\n') : DEFAULT_ROLE_LINES[stage]
 }
 
 export function formatBriefBlock(brief: Brief | null | undefined): string {

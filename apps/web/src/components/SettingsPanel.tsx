@@ -3,18 +3,19 @@ import { useStore } from '@nanostores/react'
 import { type FC, useState } from 'react'
 import { startOAuth } from '../adapters/auth'
 import { createBrowserLlm } from '../adapters/engineFactory'
-import { $apiKey, forgetApiKey, maskKey, saveApiKey } from '../adapters/keyVault'
+import { $apiKey, $keyLocked, forgetApiKey, maskKey, saveApiKey } from '../adapters/keyVault'
 import { logger } from '../adapters/logger'
 import { useModels } from '../hooks/useModels'
 import { $settings } from '../stores/settings'
 import { DataCard } from './DataCard'
-import { KeyVaultCard } from './KeyVaultCard'
+import { KeyVaultCard, UnlockForm } from './KeyVaultCard'
 import { ModelPicker } from './ModelPicker'
 import { RoleModelsCard } from './RoleModelsCard'
 import { Button, basePath, Card, Field, formatUsd, inputClass } from './ui'
 
 const KeySection: FC = () => {
   const apiKey = useStore($apiKey)
+  const locked = useStore($keyLocked)
   const [draft, setDraft] = useState('')
   const [info, setInfo] = useState<KeyInfo | null>(null)
   const [status, setStatus] = useState<string | null>(null)
@@ -49,7 +50,14 @@ const KeySection: FC = () => {
 
   return (
     <Card title="OpenRouter key">
-      {apiKey ? (
+      {locked ? (
+        <div className="flex flex-col gap-3">
+          <UnlockForm />
+          <Button variant="danger" className="self-start" onClick={forgetApiKey}>
+            Forget encrypted key
+          </Button>
+        </div>
+      ) : apiKey ? (
         <div className="flex flex-col gap-2 text-sm">
           <p>
             Key on this device:{' '}
@@ -99,10 +107,19 @@ const KeySection: FC = () => {
 
 export const SettingsPanel: FC = () => {
   const settings = useStore($settings)
+  const vaultReplaced =
+    typeof window !== 'undefined' &&
+    new URLSearchParams(window.location.search).get('vaultReplaced') === '1'
   const { models, loading, refresh } = useModels()
 
   return (
     <div className="grid gap-4 md:grid-cols-2">
+      {vaultReplaced ? (
+        <p className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm md:col-span-2">
+          The new key from OpenRouter replaced your encrypted key and is stored unencrypted. Encrypt
+          it again below if you want it protected.
+        </p>
+      ) : null}
       <KeySection />
       <RoleModelsCard />
       <DataCard />

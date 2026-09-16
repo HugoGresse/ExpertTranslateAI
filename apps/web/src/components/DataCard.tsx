@@ -5,7 +5,13 @@ import { downloadText } from '../lib/download'
 import { Button, Card } from './ui'
 
 const isBundle = (x: unknown): x is ExportBundle =>
-  typeof x === 'object' && x !== null && 'version' in x && 'tables' in x
+  typeof x === 'object' &&
+  x !== null &&
+  'version' in x &&
+  x.version === 1 &&
+  'tables' in x &&
+  typeof x.tables === 'object' &&
+  x.tables !== null
 
 export const DataCard: FC = () => {
   const [status, setStatus] = useState<string | null>(null)
