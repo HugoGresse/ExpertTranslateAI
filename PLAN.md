@@ -377,6 +377,7 @@ One cheap structured call producing `Brief`. Sees the condensed context and the 
 
 Guidelines:
 
+- Rule kinds: `must`, `must-not`, `prefer`, and `keep` (a term must appear verbatim in the target whenever it appears in the source; this is how "do not translate X" is expressed, since a `must-not` pattern cannot enumerate every wrong rendering).
 - `GuidelineSet` follows the same scope hierarchy as glossaries (global → language → client → project → document) and the same precedence. A set can be created from a form (rule list with must / must-not / prefer) or by pasting a long-form style guide into `freeText`; an optional LLM call extracts discrete `rules` from the free text so they become checkable.
 - Rules are injected into every prompt as a numbered block:
 
