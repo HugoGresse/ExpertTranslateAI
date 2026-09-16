@@ -1,4 +1,10 @@
-import type { Brief, QualityScore, Review, TargetResult } from '@experttranslate/core'
+import {
+  type Brief,
+  type QualityScore,
+  type Review,
+  restorePlaceholders,
+  type TargetResult,
+} from '@experttranslate/core'
 import { type FC, useState } from 'react'
 import { Button } from './ui'
 
@@ -127,6 +133,7 @@ export const ReviewCard: FC<{ reviews: Review[] }> = ({ reviews }) => {
 export const CandidatesCard: FC<{ result: TargetResult }> = ({ result }) => {
   const [open, setOpen] = useState(false)
   const roles = result.plan.translators
+  const placeholders = new Map(Object.entries(result.placeholders))
   return (
     <div className="mt-3">
       <Button variant="ghost" onClick={() => setOpen((o) => !o)}>
@@ -148,7 +155,9 @@ export const CandidatesCard: FC<{ result: TargetResult }> = ({ result }) => {
                         {c.role.replace('translator', 'Candidate ')}{' '}
                         <span className="font-normal text-neutral-500">{c.model}</span>
                       </p>
-                      <pre className="whitespace-pre-wrap">{c.text}</pre>
+                      <pre className="whitespace-pre-wrap">
+                        {restorePlaceholders(c.text, placeholders)}
+                      </pre>
                     </div>
                   ))}
               </div>

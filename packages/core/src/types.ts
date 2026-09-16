@@ -223,6 +223,7 @@ export interface TargetResult {
   jobId: string
   lang: LanguageCode
   chunks: Chunk[]
+  placeholders: Record<string, string>
   candidates: Candidate[]
   finalText: string
   brief: Brief | null
@@ -250,7 +251,12 @@ export type StageName =
 export type ProgressEvent =
   | { type: 'job-started'; jobId: string; targets: Target[] }
   | { type: 'brief-done'; brief: Brief }
-  | { type: 'target-started'; lang: LanguageCode; chunkCount: number }
+  | {
+      type: 'target-started'
+      lang: LanguageCode
+      chunkCount: number
+      placeholders: Record<string, string>
+    }
   | {
       type: 'stage-started'
       lang: LanguageCode

@@ -10,6 +10,7 @@ import { map } from 'nanostores'
 export interface TargetProgress {
   status: 'pending' | 'running' | 'done' | 'failed'
   chunkCount: number
+  placeholders: Record<string, string>
   activity: string
   streamed: string
   streamingStage: StageName | null
@@ -41,6 +42,7 @@ export const $run = map<RunState>(idleRun)
 const emptyProgress = (): TargetProgress => ({
   status: 'pending',
   chunkCount: 0,
+  placeholders: {},
   activity: 'waiting',
   streamed: '',
   streamingStage: null,
@@ -84,7 +86,11 @@ export function applyProgress(event: ProgressEvent): void {
       $run.setKey('brief', event.brief)
       return
     case 'target-started':
-      patchTarget(event.lang, { status: 'running', chunkCount: event.chunkCount })
+      patchTarget(event.lang, {
+        status: 'running',
+        chunkCount: event.chunkCount,
+        placeholders: event.placeholders,
+      })
       return
     case 'stage-started':
       if (event.lang === '*') {

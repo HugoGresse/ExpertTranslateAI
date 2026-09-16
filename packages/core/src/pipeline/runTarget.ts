@@ -212,8 +212,14 @@ export async function runTarget(
   ctx: StageContext,
 ): Promise<TargetResult> {
   const setup = setupTarget(job, target, materials, ctx)
-  ctx.events.emit({ type: 'target-started', lang: target.lang, chunkCount: setup.chunks.length })
   const protectedSource = protectPlaceholders(job.sourceText)
+  const placeholders = Object.fromEntries(protectedSource.placeholders)
+  ctx.events.emit({
+    type: 'target-started',
+    lang: target.lang,
+    chunkCount: setup.chunks.length,
+    placeholders,
+  })
 
   const outcomes = await Promise.all(
     setup.chunks.map((chunk) => processChunk(job, plan, setup, chunk, ctx)),
@@ -257,6 +263,7 @@ export async function runTarget(
     jobId: job.id,
     lang: target.lang,
     chunks: setup.chunks,
+    placeholders,
     candidates,
     finalText,
     brief: materials.brief,

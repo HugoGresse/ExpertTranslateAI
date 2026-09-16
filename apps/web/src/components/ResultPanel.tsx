@@ -1,4 +1,9 @@
-import type { GuidelineViolation, TargetResult, TraceEvent } from '@experttranslate/core'
+import {
+  type GuidelineViolation,
+  restorePlaceholders,
+  type TargetResult,
+  type TraceEvent,
+} from '@experttranslate/core'
 import { type FC, useEffect, useState } from 'react'
 import { languageName, RTL_LANGS } from '../data/languages'
 import type { TargetProgress } from '../stores/run'
@@ -160,7 +165,7 @@ export const ResultPanel: FC<ResultPanelProps> = ({ targets }) => {
           <div>
             <p className="mb-1 text-xs text-neutral-500">{current.activity}</p>
             <pre className="min-h-32 whitespace-pre-wrap rounded-md border border-neutral-200 bg-neutral-50 p-2 text-sm">
-              {current.streamed}
+              {restorePlaceholders(current.streamed, new Map(Object.entries(current.placeholders)))}
             </pre>
           </div>
         ) : null}
