@@ -29,8 +29,10 @@ Requires Node 22.12 or newer.
 
 ## Offline shell
 
-The app registers a service worker (`public/sw.js`) on HTTPS origins that caches same-origin assets after the
-first visit, so the pages and your IndexedDB data open without a network. Translation still needs OpenRouter.
+Production builds register a service worker (`public/sw.js`, kept as plain JS because the static build has no
+step to emit an un-hashed worker from TypeScript). It precaches the shell, serves hashed assets cache-first and
+pages network-first with an offline fallback, so the app and your IndexedDB data open without a network.
+Translation still needs OpenRouter. Dev and e2e runs never register it.
 
 ## Deploy
 

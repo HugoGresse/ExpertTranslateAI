@@ -7,12 +7,13 @@ import {
   type TraceEvent,
   wordEditDistance,
 } from '@experttranslate/core'
-import { type FC, useEffect, useState } from 'react'
+import { useStore } from '@nanostores/react'
+import { type FC, useEffect, useMemo, useState } from 'react'
 import { storage } from '../adapters/dexieStorage'
 import { logger } from '../adapters/logger'
-import { languageLabel, RTL_LANGS } from '../data/languages'
+import { languageLabel, textDirection } from '../data/languages'
 import { downloadText } from '../lib/download'
-import { streamedText, type TargetProgress } from '../stores/run'
+import { $previews, previewChunks, type TargetProgress } from '../stores/run'
 import { BackTranslationCard } from './BackTranslationCard'
 import {
   CandidatesCard,
@@ -118,7 +119,7 @@ const FinalText: FC<{ result: TargetResult }> = ({ result }) => {
       setSaved('Could not save to memory.')
     }
   }
-  const dir = RTL_LANGS.has(result.lang) ? 'rtl' : 'ltr'
+  const dir = textDirection(result.lang)
   return (
     <div>
       <textarea
@@ -130,7 +131,11 @@ const FinalText: FC<{ result: TargetResult }> = ({ result }) => {
       />
       <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-neutral-600">
         <Button onClick={() => void navigator.clipboard.writeText(text)}>Copy</Button>
-        <Button onClick={() => downloadText(`translation-${result.lang}.txt`, text)}>
+        <Button
+          onClick={() =>
+            downloadText(`translation-${result.targetKey.replace('#', '-')}.txt`, text)
+          }
+        >
           Download
         </Button>
         <Button
@@ -176,6 +181,35 @@ const FinalText: FC<{ result: TargetResult }> = ({ result }) => {
   )
 }
 
+const StreamPreview: FC<{ targetKey: string; progress: TargetProgress }> = ({
+  targetKey,
+  progress,
+}) => {
+  const previews = useStore($previews)
+  const placeholders = useMemo(
+    () => new Map(Object.entries(progress.placeholders)),
+    [progress.placeholders],
+  )
+  const chunks = previewChunks(previews[targetKey], progress.chunkCount)
+  return (
+    <div>
+      <p className="mb-1 text-xs text-neutral-500">{progress.activity}</p>
+      <div
+        className="min-h-32 whitespace-pre-wrap rounded-md border border-neutral-200 bg-neutral-50 p-2 font-mono text-sm"
+        dir={textDirection(progress.lang)}
+        lang={progress.lang}
+      >
+        {chunks.map((text, i) => (
+          // biome-ignore lint/suspicious/noArrayIndexKey: chunk index is the identity
+          <p key={i} className={i > 0 ? 'mt-3' : ''}>
+            {restorePlaceholders(text, placeholders)}
+          </p>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export const ResultPanel: FC<ResultPanelProps> = ({ targets }) => {
   const langs = Object.keys(targets)
   const [active, setActive] = useState(langs[0] ?? '')
@@ -217,21 +251,11 @@ export const ResultPanel: FC<ResultPanelProps> = ({ targets }) => {
           <p className="text-sm text-red-700">{current.error}</p>
         ) : null}
         {current.status === 'running' ? (
-          <div>
-            <p className="mb-1 text-xs text-neutral-500">{current.activity}</p>
-            <pre
-              className="min-h-32 whitespace-pre-wrap rounded-md border border-neutral-200 bg-neutral-50 p-2 text-sm"
-              dir={RTL_LANGS.has(current.lang) ? 'rtl' : 'ltr'}
-              lang={current.lang}
-            >
-              {restorePlaceholders(
-                streamedText(current),
-                new Map(Object.entries(current.placeholders)),
-              )}
-            </pre>
-          </div>
+          <StreamPreview targetKey={active} progress={current} />
         ) : null}
-        {current.result ? <FinalText result={current.result} /> : null}
+        {current.result ? (
+          <FinalText key={current.result.targetKey} result={current.result} />
+        ) : null}
       </div>
     </div>
   )

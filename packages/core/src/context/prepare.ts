@@ -1,6 +1,7 @@
 import type { StageContext } from '../pipeline/call.ts'
 import type { LoggerPort, StoragePort } from '../ports.ts'
 import { countTokens } from '../text/tokens.ts'
+import { sliceSafe } from '../text/unicode.ts'
 import type { ContextSource, Usage } from '../types.ts'
 import { condenseSource, hasFreshDigest, needsCondense, sourceText } from './condense.ts'
 
@@ -14,21 +15,16 @@ export function activeContextSources(sources: ContextSource[], lang: string): Co
   return sources.filter((s) => s.enabled && (!s.lang || s.lang === lang))
 }
 
-export function sliceSafe(text: string, end: number): string {
-  let cut = Math.min(end, text.length)
-  const code = text.charCodeAt(cut - 1)
-  if (cut > 0 && code >= 0xd800 && code <= 0xdbff) cut--
-  return text.slice(0, cut)
-}
-
 export function truncateToTokens(
   text: string,
   maxTokens: number,
 ): { text: string; truncated: boolean } {
-  if (countTokens(text) <= maxTokens) return { text, truncated: false }
-  let out = text
+  const total = countTokens(text)
+  if (total <= maxTokens) return { text, truncated: false }
+  // One proportional cut lands close to the budget; the loop only mops up the estimate error.
+  let out = sliceSafe(text, 0, Math.floor((text.length * maxTokens * 0.95) / total))
   while (out.length > 0 && countTokens(out) > maxTokens)
-    out = sliceSafe(out, Math.floor(out.length * 0.85))
+    out = sliceSafe(out, 0, Math.floor(out.length * 0.85))
   return { text: `${out}\n…`, truncated: true }
 }
 

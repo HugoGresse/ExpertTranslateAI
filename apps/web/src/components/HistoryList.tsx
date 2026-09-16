@@ -38,9 +38,9 @@ const JobRow: FC<{ job: TranslationJob; onDelete: (id: string) => void }> = ({ j
             <p className="text-xs text-neutral-500">No results stored.</p>
           ) : null}
           {results.map((r) => (
-            <div key={r.lang}>
+            <div key={r.targetKey}>
               <p className="text-xs font-medium">
-                {languageLabel(r.lang)} · {formatUsd(r.cost.usd)}
+                {languageLabel(r.lang, r.region)} · {formatUsd(r.cost.usd)}
               </p>
               <pre className="mt-1 whitespace-pre-wrap rounded-md bg-neutral-50 p-2 text-sm">
                 {r.finalText}

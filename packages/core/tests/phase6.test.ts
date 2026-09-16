@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { sliceSafe, truncateToTokens } from '../src/context/prepare.ts'
+import { truncateToTokens } from '../src/context/prepare.ts'
 import { createEngine } from '../src/engine.ts'
 import { noopLogger } from '../src/ports.ts'
+import { chunkText } from '../src/text/chunk.ts'
+import { sliceSafe } from '../src/text/unicode.ts'
 import type { ProgressEvent } from '../src/types.ts'
 import { createFakeLlm, createMemoryStorage, sampleJob } from './fakes.ts'
 
@@ -27,10 +29,6 @@ describe('progress events carry the target key', () => {
     expect(started.map((e) => (e.type === 'target-started' ? e.targetKey : ''))).toEqual([
       'es',
       'es#mexico',
-    ])
-    expect(started.map((e) => (e.type === 'target-started' ? e.region : null))).toEqual([
-      undefined,
-      'Mexico',
     ])
     const tokens = events.filter((e) => e.type === 'token')
     const keys = new Set(tokens.map((e) => (e.type === 'token' ? e.targetKey : '')))
@@ -84,23 +82,47 @@ describe('guidelines block truncation', () => {
     const system = llm.calls[0]?.request.messages[0]?.content ?? ''
     expect(system).toContain('<GUIDELINES>')
     expect(system).toContain('</GUIDELINES>')
-    expect(system.indexOf('</GUIDELINES>')).toBeGreaterThan(system.indexOf('…'))
+    expect(system).toContain('1. PREFER Rule number 0 says')
     expect(system).not.toContain('Rule number 79')
+    const kept = system.match(
+      /^\d+\. PREFER Rule number \d+ says something fairly long about style and tone$/gm,
+    )
+    expect(kept?.length ?? 0).toBeGreaterThan(0)
+    expect(system).not.toMatch(
+      /Rule number \d+ says something fairly long about style and tone[^\n]+…/,
+    )
   })
 })
 
 describe('sliceSafe', () => {
   it('never splits a surrogate pair', () => {
     const text = 'ab😀cd'
-    expect(sliceSafe(text, 3)).toBe('ab')
-    expect(sliceSafe(text, 4)).toBe('ab😀')
-    expect(sliceSafe(text, 99)).toBe(text)
+    expect(sliceSafe(text, 0, 3)).toBe('ab')
+    expect(sliceSafe(text, 0, 4)).toBe('ab😀')
+    expect(sliceSafe(text, 0, 99)).toBe(text)
+    expect(sliceSafe(text, 3)).toBe('cd')
+    expect(sliceSafe(text, 2)).toBe('😀cd')
+  })
+
+  it('character-level chunking never splits a placeholder token or a surrogate pair', () => {
+    const text = `${'😀'.repeat(400)}⟦PH0⟧${'字'.repeat(400)}⟦PH1⟧${'😀'.repeat(400)}`
+    const chunks = chunkText(text, 50)
+    expect(chunks.length).toBeGreaterThan(1)
+    for (const c of chunks) {
+      expect(
+        /[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/.test(c.text),
+      ).toBe(false)
+      expect((c.text.match(/⟦/g) ?? []).length).toBe((c.text.match(/⟧/g) ?? []).length)
+    }
+    expect(chunks.map((c) => c.text).join('')).toBe(text)
   })
 
   it('truncated output stays well-formed UTF-16', () => {
     const text = '😀'.repeat(400)
     const { text: out, truncated } = truncateToTokens(text, 20)
     expect(truncated).toBe(true)
-    expect(/[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/.test(out)).toBe(false)
+    expect(/[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/.test(out)).toBe(
+      false,
+    )
   })
 })

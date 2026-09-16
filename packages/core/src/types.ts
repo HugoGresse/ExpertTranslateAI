@@ -408,7 +408,6 @@ export type ProgressEvent =
       type: 'target-started'
       lang: LanguageCode
       targetKey: string
-      region?: string
       chunkCount: number
       placeholders: Record<string, string>
     }

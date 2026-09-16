@@ -13,27 +13,12 @@ import { storage } from '../adapters/dexieStorage'
 import { logger } from '../adapters/logger'
 import { LANGUAGES, languageName } from '../data/languages'
 import { useRepo } from '../hooks/useRepo'
+import { readTextFile, TEXT_FILE_ACCEPT } from '../lib/files'
+import { normalizeUrl } from '../lib/url'
 import { $settings, numberSetting } from '../stores/settings'
 import { Button, Card, Field, inputClass } from './ui'
 
 type Mode = 'url' | 'file' | 'paste'
-
-const readFile = (file: File): Promise<string> => file.text()
-
-function normalizeUrl(raw: string): string {
-  const trimmed = raw.trim()
-  if (!trimmed) throw new Error('Enter a URL first')
-  const withScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`
-  let parsed: URL
-  try {
-    parsed = new URL(withScheme)
-  } catch {
-    throw new Error('That does not look like a valid URL')
-  }
-  if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:')
-    throw new Error('Only http(s) URLs are supported')
-  return parsed.toString()
-}
 
 async function buildSource(input: {
   name: string
@@ -88,7 +73,7 @@ const AddSourceForm: FC<{ onAdd: (s: ContextSource) => Promise<void> }> = ({ onA
         kind = isLlmsTxt(body, sourceUrl) ? 'llms-txt' : 'markdown-url'
       } else if (mode === 'file') {
         if (!file) throw new Error('Choose a file first')
-        rawText = await readFile(file)
+        rawText = await readTextFile(file)
         kind = isLlmsTxt(rawText, file.name) ? 'llms-txt' : 'markdown-file'
       } else if (isLlmsTxt(rawText)) {
         kind = 'llms-txt'
@@ -149,7 +134,7 @@ const AddSourceForm: FC<{ onAdd: (s: ContextSource) => Promise<void> }> = ({ onA
           <Field label="File (.md, .txt)">
             <input
               type="file"
-              accept=".md,.txt,.markdown,text/plain,text/markdown"
+              accept={TEXT_FILE_ACCEPT}
               onChange={(e) => setFile(e.target.files?.[0] ?? null)}
             />
           </Field>
@@ -197,7 +182,8 @@ const SourceRow: FC<{
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const tokens = useMemo(() => countTokens(source.rawText), [source.rawText])
-  const condense = useMemo(() => needsCondense(source, budget), [source, budget])
+  // Compares the token count already computed above instead of tokenising the text a second time.
+  const condense = source.kind === 'llms-txt' ? needsCondense(source, budget) : tokens > budget
   const digestFresh = source.condensed?.forHash === source.contentHash
 
   const refetch = async (): Promise<void> => {
@@ -205,9 +191,10 @@ const SourceRow: FC<{
     setBusy(true)
     setError(null)
     try {
-      const { body } = await browserFetch.text(source.url)
+      const url = normalizeUrl(source.url)
+      const { body } = await browserFetch.text(url)
       const hash = await contentHash(body)
-      await onSave({ ...source, rawText: body, contentHash: hash, fetchedAt: Date.now() })
+      await onSave({ ...source, url, rawText: body, contentHash: hash, fetchedAt: Date.now() })
     } catch (e) {
       logger.warn('context.refetchFailed', { source: source.id, error: String(e) })
       setError(e instanceof Error ? e.message : String(e))

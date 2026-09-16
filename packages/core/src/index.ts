@@ -20,7 +20,12 @@ export { formatGlossaryBlock } from './glossary/format.ts'
 export { expandScopeIds, resolveGlossary } from './glossary/resolve.ts'
 export { checkGuidelines, checkRule, isCheckable } from './guidelines/check.ts'
 export { extractRules, normalizeRules } from './guidelines/extract.ts'
-export { activeGuidelineSets, formatGuidelinesBlock, numberRules } from './guidelines/format.ts'
+export {
+  activeGuidelineSets,
+  fitGuidelinesBlock,
+  formatGuidelinesBlock,
+  numberRules,
+} from './guidelines/format.ts'
 export { collectText, extractJson } from './llm/collect.ts'
 export { createLimiter, type Limiter } from './llm/limiter.ts'
 export {
@@ -78,6 +83,7 @@ export { placeholderParity, protectPlaceholders, restorePlaceholders } from './t
 export { normalizeSentence, splitSentences } from './text/sentences.ts'
 export { escapeRe, wholeTermRe } from './text/terms.ts'
 export { countTokens } from './text/tokens.ts'
+export { sliceSafe } from './text/unicode.ts'
 export { type LearnInput, learnCorrections } from './tm/learn.ts'
 export { FUZZY_THRESHOLD, formatMemoryBlock, matchMemory, trigramSimilarity } from './tm/match.ts'
 export type * from './types.ts'

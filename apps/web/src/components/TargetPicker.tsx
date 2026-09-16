@@ -1,4 +1,4 @@
-import type { Target } from '@experttranslate/core'
+import { type Target, targetKey } from '@experttranslate/core'
 import { type FC, useState } from 'react'
 import { LANGUAGES, languageLabel } from '../data/languages'
 import { Button, inputClass } from './ui'
@@ -14,9 +14,9 @@ export const TargetPicker: FC<TargetPickerProps> = ({ targets, onChange }) => {
 
   const add = (): void => {
     const trimmedRegion = region.trim()
-    const exists = targets.some((t) => t.lang === lang && (t.region ?? '') === trimmedRegion)
-    if (exists) return
-    onChange([...targets, trimmedRegion ? { lang, region: trimmedRegion } : { lang }])
+    const candidate: Target = trimmedRegion ? { lang, region: trimmedRegion } : { lang }
+    if (targets.some((t) => targetKey(t) === targetKey(candidate))) return
+    onChange([...targets, candidate])
     setRegion('')
   }
 

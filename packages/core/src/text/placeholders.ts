@@ -13,7 +13,10 @@ const PATTERNS: RegExp[] = [
   /<\/?[a-zA-Z][^>]*>/g,
 ]
 
-export const placeholderToken = (index: number): string => `⟦PH${index}⟧`
+export const PLACEHOLDER_OPEN = '⟦'
+export const PLACEHOLDER_CLOSE = '⟧'
+export const placeholderToken = (index: number): string =>
+  `${PLACEHOLDER_OPEN}PH${index}${PLACEHOLDER_CLOSE}`
 
 const TOKEN_RE = /⟦PH(\d+)⟧/g
 

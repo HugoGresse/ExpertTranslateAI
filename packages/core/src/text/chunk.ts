@@ -1,5 +1,7 @@
 import type { Chunk } from '../types.ts'
+import { PLACEHOLDER_CLOSE, PLACEHOLDER_OPEN } from './placeholders.ts'
 import { countTokens } from './tokens.ts'
+import { sliceSafe } from './unicode.ts'
 
 export function calculateChunkSize(tokenCount: number, tokenLimit: number): number {
   if (tokenCount <= tokenLimit) return tokenCount
@@ -28,10 +30,20 @@ function splitRecursive(text: string, maxTokens: number, separators: string[]): 
   return out
 }
 
+/** Last resort when no separator fits: cut by character count, never inside a surrogate pair or a placeholder token. */
 function splitByCharacters(text: string, maxTokens: number): string[] {
   const out: string[] = []
   const approxChars = Math.max(1, maxTokens * 3)
-  for (let i = 0; i < text.length; i += approxChars) out.push(text.slice(i, i + approxChars))
+  let i = 0
+  while (i < text.length) {
+    let end = Math.min(text.length, i + approxChars)
+    const open = text.lastIndexOf(PLACEHOLDER_OPEN, end - 1)
+    if (open > i && open < end && text.indexOf(PLACEHOLDER_CLOSE, open) >= end) end = open
+    const piece = sliceSafe(text, i, end)
+    if (piece.length === 0) break
+    out.push(piece)
+    i += piece.length
+  }
   return out
 }
 

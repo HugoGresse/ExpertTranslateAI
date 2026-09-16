@@ -38,6 +38,9 @@ export const LANGUAGES: LanguageOption[] = [
 
 export const RTL_LANGS = new Set(['ar', 'he', 'fa', 'ur'])
 
+export const textDirection = (code: string): 'rtl' | 'ltr' =>
+  RTL_LANGS.has(code.split('-')[0] ?? code) ? 'rtl' : 'ltr'
+
 export const languageName = (code: string): string =>
   LANGUAGES.find((l) => l.code === code)?.name ?? code
 

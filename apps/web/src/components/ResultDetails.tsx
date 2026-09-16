@@ -10,7 +10,7 @@ import {
   type TermViolation,
 } from '@experttranslate/core'
 import { type FC, useState } from 'react'
-import { RTL_LANGS } from '../data/languages'
+import { textDirection } from '../data/languages'
 import { Button } from './ui'
 
 const DIMENSIONS: Array<{
@@ -162,7 +162,7 @@ export const CandidatesCard: FC<{ result: TargetResult }> = ({ result }) => {
                       </p>
                       <pre
                         className="whitespace-pre-wrap"
-                        dir={RTL_LANGS.has(result.lang) ? 'rtl' : 'ltr'}
+                        dir={textDirection(result.lang)}
                         lang={result.lang}
                       >
                         {restorePlaceholders(c.text, placeholders)}

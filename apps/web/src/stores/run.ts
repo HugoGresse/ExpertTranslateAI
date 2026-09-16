@@ -1,11 +1,13 @@
-import type {
-  Brief,
-  CostSummary,
-  ProgressEvent,
-  StageName,
-  TargetResult,
+import {
+  type Brief,
+  type CostSummary,
+  type ProgressEvent,
+  type StageName,
+  type TargetResult,
+  targetKey,
 } from '@experttranslate/core'
 import { map } from 'nanostores'
+import { logger } from '../adapters/logger'
 
 export interface TargetProgress {
   lang: string
@@ -14,9 +16,6 @@ export interface TargetProgress {
   chunkCount: number
   placeholders: Record<string, string>
   activity: string
-  streamingStage: StageName | null
-  streams: Record<number, string>
-  stageCalls: Partial<Record<StageName, number>>
   result?: TargetResult
   error?: string
 }
@@ -41,6 +40,18 @@ export const idleRun: RunState = {
 
 export const $run = map<RunState>(idleRun)
 
+/** Live text per chunk, bucketed by the stage that produced it; the finalizer overrides the translator per chunk. */
+export interface TargetPreview {
+  translate: Record<number, string>
+  finalize: Record<number, string>
+}
+
+/** Kept apart from `$run` so token bursts only re-render the preview pane, not the whole workspace. */
+export const $previews = map<Record<string, TargetPreview>>({})
+
+export const previewChunks = (preview: TargetPreview | undefined, chunkCount: number): string[] =>
+  Array.from({ length: chunkCount }, (_, i) => preview?.finalize[i] ?? preview?.translate[i] ?? '')
+
 const emptyProgress = (lang: string, region?: string): TargetProgress => ({
   lang,
   ...(region ? { region } : {}),
@@ -48,30 +59,16 @@ const emptyProgress = (lang: string, region?: string): TargetProgress => ({
   chunkCount: 0,
   placeholders: {},
   activity: 'waiting',
-  streamingStage: null,
-  streams: {},
-  stageCalls: {},
 })
 
-export const streamedText = (p: TargetProgress): string =>
-  Object.keys(p.streams)
-    .map(Number)
-    .sort((a, b) => a - b)
-    .map((i) => p.streams[i] ?? '')
-    .join('\n\n')
-
-const keyOf = (t: { lang: string; region?: string | undefined }): string =>
-  t.region ? `${t.lang}#${t.region.trim().toLowerCase()}` : t.lang
-
-const patchTarget = (
-  key: string,
-  patch: Partial<TargetProgress> | ((p: TargetProgress) => Partial<TargetProgress>),
-): void => {
+const patchTarget = (key: string, patch: Partial<TargetProgress>): void => {
   const targets = $run.get().targets
   const current = targets[key]
-  if (!current) return
-  const delta = typeof patch === 'function' ? patch(current) : patch
-  $run.setKey('targets', { ...targets, [key]: { ...current, ...delta } })
+  if (!current) {
+    logger.warn('run.unknownTarget', { key, known: Object.keys(targets) })
+    return
+  }
+  $run.setKey('targets', { ...targets, [key]: { ...current, ...patch } })
 }
 
 const STAGE_LABEL: Record<StageName, string> = {
@@ -86,12 +83,25 @@ const STAGE_LABEL: Record<StageName, string> = {
   backtranslate: 'back-translating',
 }
 
-const isPreviewStream = (stage: StageName, role: string): boolean =>
-  stage === 'finalize' || (stage === 'translate' && role === 'translatorA')
+type PreviewStage = keyof TargetPreview
+
+const previewStageOf = (stage: StageName, role: string): PreviewStage | null =>
+  stage === 'finalize'
+    ? 'finalize'
+    : stage === 'translate' && role === 'translatorA'
+      ? 'translate'
+      : null
+
+const writePreview = (key: string, stage: PreviewStage, chunkIndex: number, text: string): void => {
+  const all = $previews.get()
+  const current = all[key] ?? { translate: {}, finalize: {} }
+  $previews.setKey(key, { ...current, [stage]: { ...current[stage], [chunkIndex]: text } })
+}
 
 export function applyProgress(event: ProgressEvent): void {
   switch (event.type) {
     case 'job-started':
+      $previews.set({})
       $run.set({
         status: 'running',
         jobId: event.jobId,
@@ -99,7 +109,7 @@ export function applyProgress(event: ProgressEvent): void {
         cost: null,
         error: null,
         targets: Object.fromEntries(
-          event.targets.map((t) => [keyOf(t), emptyProgress(t.lang, t.region)]),
+          event.targets.map((t) => [targetKey(t), emptyProgress(t.lang, t.region)]),
         ),
       })
       return
@@ -113,41 +123,31 @@ export function applyProgress(event: ProgressEvent): void {
         placeholders: event.placeholders,
       })
       return
-    case 'stage-started':
+    case 'stage-started': {
       if (event.targetKey === '*') {
         for (const key of Object.keys($run.get().targets))
           patchTarget(key, { activity: STAGE_LABEL[event.stage] })
         return
       }
-      patchTarget(event.targetKey, (p) => {
-        const chunkLabel =
-          event.chunkIndex !== null ? `, chunk ${event.chunkIndex + 1}/${p.chunkCount}` : ''
-        const activity = `${STAGE_LABEL[event.stage]} (${event.role}${chunkLabel})`
-        if (!isPreviewStream(event.stage, event.role) || event.chunkIndex === null)
-          return { activity }
-        const switching = event.stage === 'finalize' && p.streamingStage !== 'finalize'
-        const streams = switching ? {} : { ...p.streams }
-        if (event.stage === 'translate' && p.streamingStage === 'finalize') return { activity }
-        streams[event.chunkIndex] = ''
-        return { activity, streamingStage: event.stage, streams }
+      const chunkCount = $run.get().targets[event.targetKey]?.chunkCount ?? 0
+      const chunkLabel =
+        event.chunkIndex !== null ? `, chunk ${event.chunkIndex + 1}/${chunkCount}` : ''
+      patchTarget(event.targetKey, {
+        activity: `${STAGE_LABEL[event.stage]} (${event.role}${chunkLabel})`,
       })
+      const stage = previewStageOf(event.stage, event.role)
+      if (stage && event.chunkIndex !== null)
+        writePreview(event.targetKey, stage, event.chunkIndex, '')
       return
-    case 'token':
-      patchTarget(event.targetKey, (p) => {
-        if (event.stage !== p.streamingStage || !isPreviewStream(event.stage, event.role)) return {}
-        return {
-          streams: {
-            ...p.streams,
-            [event.chunkIndex]: (p.streams[event.chunkIndex] ?? '') + event.delta,
-          },
-        }
-      })
+    }
+    case 'token': {
+      const stage = previewStageOf(event.stage, event.role)
+      if (!stage) return
+      const existing = $previews.get()[event.targetKey]?.[stage][event.chunkIndex] ?? ''
+      writePreview(event.targetKey, stage, event.chunkIndex, existing + event.delta)
       return
+    }
     case 'stage-done':
-      if (event.targetKey === '*') return
-      patchTarget(event.targetKey, (p) => ({
-        stageCalls: { ...p.stageCalls, [event.stage]: (p.stageCalls[event.stage] ?? 0) + 1 },
-      }))
       return
     case 'escalated':
       patchTarget(event.targetKey, {

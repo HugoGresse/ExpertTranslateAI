@@ -1,13 +1,8 @@
-import { activeContextSources, buildContextBlock, truncateToTokens } from '../context/prepare.ts'
+import { activeContextSources, buildContextBlock } from '../context/prepare.ts'
 import { glossaryTargetTerms } from '../glossary/check.ts'
 import { formatGlossaryBlock } from '../glossary/format.ts'
 import { resolveGlossary } from '../glossary/resolve.ts'
-import {
-  activeGuidelineSets,
-  formatGuidelinesBlock,
-  type NumberedRule,
-  numberRules,
-} from '../guidelines/format.ts'
+import { activeGuidelineSets, fitGuidelinesBlock, type NumberedRule } from '../guidelines/format.ts'
 import type { PromptMaterials } from '../prompts/materials.ts'
 import { chunkText } from '../text/chunk.ts'
 import { protectPlaceholders } from '../text/placeholders.ts'
@@ -66,16 +61,6 @@ export const resolveSourceLang = (job: TranslationJob, brief: Brief | null): str
 const sourceLabel = (job: TranslationJob, brief: Brief | null): string =>
   resolveSourceLang(job, brief) ?? 'the source language (detect it yourself)'
 
-function truncateGuidelinesBlock(
-  block: string,
-  budget: number,
-): { text: string; truncated: boolean } {
-  if (!block) return { text: '', truncated: false }
-  const inner = block.replace(/^<GUIDELINES>\n?/, '').replace(/\n?<\/GUIDELINES>$/, '')
-  const fitted = truncateToTokens(inner, Math.max(1, budget - 8))
-  return { text: `<GUIDELINES>\n${fitted.text}\n</GUIDELINES>`, truncated: fitted.truncated }
-}
-
 export const targetLabelOf = (t: Target): string =>
   t.region ? `${t.lang} as spoken in ${t.region}` : t.lang
 
@@ -90,11 +75,13 @@ export function setupTarget(
   const sources = activeContextSources(materials.sources, target.lang)
   const context = buildContextBlock(sources, job.options.contextTokenBudget, ctx.logger)
   const sets = activeGuidelineSets(materials.guidelineSets, target.lang)
-  const guidelines = truncateGuidelinesBlock(
-    formatGuidelinesBlock(sets),
-    job.options.guidelinesTokenBudget,
-  )
-  if (guidelines.truncated) ctx.logger.warn('guidelines.truncated', { lang: target.lang })
+  const guidelines = fitGuidelinesBlock(sets, job.options.guidelinesTokenBudget)
+  if (guidelines.truncated)
+    ctx.logger.warn('guidelines.truncated', {
+      lang: target.lang,
+      kept: guidelines.rules.length,
+      budget: job.options.guidelinesTokenBudget,
+    })
   const glossary = resolveGlossary(
     materials.glossaryScopes,
     materials.glossaryEntries,
@@ -134,7 +121,7 @@ export function setupTarget(
       overrides: job.options.promptOverrides,
     },
     sets,
-    rules: numberRules(sets),
+    rules: guidelines.rules,
     glossary,
     glossaryTerms: glossaryTargetTerms(glossary),
     memoryHits: [...memory.exact, ...memory.fuzzy],

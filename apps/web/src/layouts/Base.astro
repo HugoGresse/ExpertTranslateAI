@@ -51,10 +51,9 @@ const links = [
     <main class="mx-auto max-w-6xl px-4 py-6">
       <slot />
     </main>
-    <script is:inline define:vars={{ base }}>
-      if ('serviceWorker' in navigator && location.protocol === 'https:') {
-        navigator.serviceWorker.register(`${base}/sw.js`, { scope: `${base}/` }).catch(() => undefined)
-      }
+    <script>
+      import { registerServiceWorker } from '../lib/registerServiceWorker'
+      registerServiceWorker()
     </script>
   </body>
 </html>

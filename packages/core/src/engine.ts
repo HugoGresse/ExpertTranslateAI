@@ -1,4 +1,4 @@
-import { ensureDigests, sliceSafe } from './context/prepare.ts'
+import { ensureDigests } from './context/prepare.ts'
 import { addUsage, emptyCost, findPricing, usageCost } from './llm/pricing.ts'
 import { createBudgetTracker } from './pipeline/budget.ts'
 import type { StageContext } from './pipeline/call.ts'
@@ -12,6 +12,7 @@ import { targetKey } from './pipeline/targetKey.ts'
 import type { EnginePorts, Repo } from './ports.ts'
 import { chunkText } from './text/chunk.ts'
 import { countTokens } from './text/tokens.ts'
+import { sliceSafe } from './text/unicode.ts'
 import type {
   Brief,
   ContextSource,
@@ -33,7 +34,6 @@ export interface Engine {
 
 const errorMessage = (error: unknown): string =>
   error instanceof Error ? error.message : String(error)
-const isLowSurrogate = (code: number): boolean => code >= 0xdc00 && code <= 0xdfff
 const isAbort = (error: unknown): boolean =>
   error instanceof DOMException && error.name === 'AbortError'
 
@@ -47,9 +47,8 @@ const BRIEF_MAX_TOKENS = 6000
 
 function briefSource(text: string): string {
   if (countTokens(text) <= BRIEF_MAX_TOKENS) return text
-  const head = sliceSafe(text, Math.floor(text.length * 0.6))
-  const tailStart = text.length - Math.floor(text.length * 0.15)
-  const tail = text.slice(tailStart + (isLowSurrogate(text.charCodeAt(tailStart)) ? 1 : 0))
+  const head = sliceSafe(text, 0, Math.floor(text.length * 0.6))
+  const tail = sliceSafe(text, text.length - Math.floor(text.length * 0.15))
   return `${head}\n[...]\n${tail}`
 }
 

@@ -106,7 +106,6 @@ export async function runTarget(
     type: 'target-started',
     lang: target.lang,
     targetKey: setup.key,
-    ...(target.region ? { region: target.region } : {}),
     chunkCount: setup.chunks.length,
     placeholders,
   })
