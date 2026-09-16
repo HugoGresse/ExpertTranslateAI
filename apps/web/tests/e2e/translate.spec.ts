@@ -48,6 +48,7 @@ test('translates into two languages with placeholders restored and stores histor
 }) => {
   await page.addInitScript(() => {
     localStorage.setItem('eta.openrouter.key', 'sk-or-e2e')
+    localStorage.setItem('eta.settings.autoEscalate', 'false')
     localStorage.setItem('eta.settings.translatorModel', 'test/model')
     localStorage.setItem('eta.settings.difficulty', 'simple')
     localStorage.setItem(

@@ -46,6 +46,7 @@ test('normal difficulty runs brief, two translators, review, finalize and score'
 }) => {
   await page.addInitScript(() => {
     localStorage.setItem('eta.openrouter.key', 'sk-or-e2e')
+    localStorage.setItem('eta.settings.autoEscalate', 'false')
     localStorage.setItem('eta.settings.translatorModel', 'test/model')
     localStorage.setItem('eta.settings.translatorBModel', 'test/model-b')
     localStorage.setItem('eta.settings.reviewerModel', 'test/reviewer')

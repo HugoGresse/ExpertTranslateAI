@@ -13,6 +13,7 @@ test('glossary scope and memory reach the prompt, violations are reported, corre
 }) => {
   await page.addInitScript(() => {
     localStorage.setItem('eta.openrouter.key', 'sk-or-e2e')
+    localStorage.setItem('eta.settings.autoEscalate', 'false')
     localStorage.setItem('eta.settings.translatorModel', 'test/model')
     localStorage.setItem('eta.settings.difficulty', 'simple')
     localStorage.setItem('eta.settings.sourceLang', 'en')
