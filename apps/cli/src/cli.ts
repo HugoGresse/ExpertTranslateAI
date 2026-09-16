@@ -10,9 +10,13 @@ import {
   type LoggerPort,
   type TargetResult,
 } from '@experttranslate/core'
-import { createJsonStorage } from './adapters/jsonStorage.ts'
-import { createStderrLogger, type LogLevel, parseLogLevel } from './adapters/logger.ts'
-import { createNodeFetch } from './adapters/nodeFetch.ts'
+import {
+  createJsonStorage,
+  createNodeFetch,
+  createStderrLogger,
+  type LogLevel,
+  parseLogLevel,
+} from '@experttranslate/node'
 import { type CliArgs, parseCliArgs, type TranslateArgs, USAGE } from './args.ts'
 import { buildJob, roleModelsFor } from './job.ts'
 import { loadContexts, loadGuidelineFiles } from './materials.ts'

@@ -12,7 +12,7 @@ import {
 import { useStore } from '@nanostores/react'
 import { type FC, useEffect, useMemo, useRef, useState } from 'react'
 import { storage } from '../adapters/dexieStorage'
-import { createBrowserEngine } from '../adapters/engineFactory'
+import { createEngineHandle } from '../adapters/engineFactory'
 import { $apiKey } from '../adapters/keyVault'
 import { logger } from '../adapters/logger'
 import { LANGUAGES } from '../data/languages'
@@ -34,6 +34,7 @@ import {
   roleModels,
   type Settings,
   toggleId,
+  usesServer,
 } from '../stores/settings'
 import { KeyGate } from './KeyGate'
 import { MaterialChips } from './MaterialChips'
@@ -160,11 +161,11 @@ export const TranslateWorkspace: FC = () => {
     ],
   )
 
-  const engineFactory = useMemo(
-    () =>
-      apiKey ? () => createBrowserEngine(apiKey, numberSetting(settings.concurrency, 4)) : null,
-    [apiKey, settings.concurrency],
-  )
+  const remote = usesServer(settings)
+  const engineFactory = useMemo(() => {
+    const handle = createEngineHandle(settings, apiKey, numberSetting(settings.concurrency, 4))
+    return handle ? () => handle : null
+  }, [apiKey, settings])
 
   useEffect(() => {
     if (!engineFactory || source.trim().length === 0 || targets.length === 0) {
@@ -211,12 +212,12 @@ export const TranslateWorkspace: FC = () => {
   const cancel = (): void => controller.current?.abort()
 
   const busy = run.status === 'running'
-  const canRun = Boolean(apiKey) && !busy && source.trim().length > 0 && targets.length > 0
+  const canRun = engineFactory !== null && !busy && source.trim().length > 0 && targets.length > 0
 
   return (
     <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
       <div className="flex flex-col gap-4">
-        {!apiKey ? <KeyGate /> : null}
+        {!apiKey && !remote ? <KeyGate /> : null}
         <Card title="Source">
           <SourceInput value={source} onChange={(text) => $sourceDraft.set(text)} />
           <div className="mt-2 grid gap-3 sm:grid-cols-2">

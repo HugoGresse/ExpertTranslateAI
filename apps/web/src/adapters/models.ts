@@ -1,11 +1,11 @@
-import type { LlmPort, ModelInfo } from '@experttranslate/core'
+import type { ModelInfo } from '@experttranslate/core'
 import { db } from './dexieStorage'
 import { logger } from './logger'
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000
 
 export async function loadModels(
-  llm: LlmPort,
+  llm: { models(): Promise<ModelInfo[]> },
   opts: { force?: boolean } = {},
 ): Promise<ModelInfo[]> {
   const cached = await db.modelCache.get('catalog')

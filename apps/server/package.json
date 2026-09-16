@@ -1,18 +1,19 @@
 {
-  "name": "@experttranslate/cli",
+  "name": "@experttranslate/server",
   "private": true,
   "version": "0.0.0",
   "type": "module",
-  "description": "Command-line front end for the ExpertTranslateAI engine (Node adapters, JSON file storage).",
+  "description": "HTTP server that runs the ExpertTranslateAI engine with a server-held OpenRouter key and streams progress over SSE.",
   "bin": {
-    "eta": "./bin/eta.ts"
+    "eta-server": "./bin/eta-server.ts"
   },
   "engines": {
     "node": ">=22.18.0"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "start": "node bin/eta-server.ts"
   },
   "dependencies": {
     "@experttranslate/core": "*",

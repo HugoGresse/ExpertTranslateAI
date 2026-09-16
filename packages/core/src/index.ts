@@ -42,7 +42,7 @@ export {
 } from './llm/openRouterLlm.ts'
 export { emptyCost, findPricing, sumCosts, usageCost } from './llm/pricing.ts'
 export { LlmHttpError, LlmStreamError } from './llm/retry.ts'
-export { StreamIdleTimeoutError } from './llm/sse.ts'
+export { readSseData, StreamIdleTimeoutError } from './llm/sse.ts'
 export { LOG_LEVELS, type LogLevel, levelEnabled, parseLogLevel } from './logging.ts'
 export { DIFFICULTY_ORDER, decideEscalation, nextDifficulty } from './pipeline/escalation.ts'
 export { buildEvalRecord, promptOverrideHash, wordCount } from './pipeline/evalRecord.ts'
@@ -79,6 +79,14 @@ export {
   type Prompt,
   type TranslatePromptInput,
 } from './prompts/translate.ts'
+export { createRemoteEngine, type RemoteEngine, type RemoteEngineOptions } from './remote/client.ts'
+export {
+  collectMaterials,
+  isRemoteJobRequest,
+  REMOTE_MATERIAL_TABLES,
+  type RemoteJobRequest,
+  type RemoteMaterials,
+} from './remote/protocol.ts'
 export {
   alignSentences,
   DISAGREEMENT_SIMILARITY,

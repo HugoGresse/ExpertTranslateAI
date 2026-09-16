@@ -11,6 +11,7 @@ import { DataCard } from './DataCard'
 import { KeyVaultCard, UnlockForm } from './KeyVaultCard'
 import { ModelPicker } from './ModelPicker'
 import { RoleModelsCard } from './RoleModelsCard'
+import { ServerCard } from './ServerCard'
 import { Button, basePath, Card, Field, formatUsd, inputClass } from './ui'
 
 const KeySection: FC = () => {
@@ -121,6 +122,7 @@ export const SettingsPanel: FC = () => {
         </p>
       ) : null}
       <KeySection />
+      <ServerCard />
       <RoleModelsCard />
       <DataCard />
       <Card title="Defaults">

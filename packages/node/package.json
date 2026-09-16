@@ -1,11 +1,11 @@
 {
-  "name": "@experttranslate/cli",
+  "name": "@experttranslate/node",
   "private": true,
   "version": "0.0.0",
   "type": "module",
-  "description": "Command-line front end for the ExpertTranslateAI engine (Node adapters, JSON file storage).",
-  "bin": {
-    "eta": "./bin/eta.ts"
+  "description": "Node adapters for the ExpertTranslateAI engine: JSON file storage, fetch, stderr logger, storage overlay.",
+  "exports": {
+    ".": "./src/index.ts"
   },
   "engines": {
     "node": ">=22.18.0"
@@ -15,8 +15,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@experttranslate/core": "*",
-    "@experttranslate/node": "*"
+    "@experttranslate/core": "*"
   },
   "devDependencies": {
     "vitest": "^5.0.1"

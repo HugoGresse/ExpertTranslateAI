@@ -10,7 +10,9 @@ See [PLAN.md](PLAN.md) for the full design and roadmap, and `Architecture cœur.
 ```
 packages/core   engine: chunking, prompts, OpenRouter client, pipeline (pure TypeScript, runs in browser or Node)
 apps/web        Astro + React UI, browser adapters (IndexedDB storage, key vault, PKCE auth)
+packages/node   Node adapters shared by the CLI and the server (JSON file storage, fetch, stderr logger)
 apps/cli        Node front end for the same engine (JSON file storage, stdin/stdout, web export import)
+apps/server     HTTP server: server-held OpenRouter key, jobs streamed over SSE, bearer-token auth
 ```
 
 ## Develop
@@ -41,6 +43,21 @@ Other commands: `eta models --filter claude`, `eta key`, and `eta import export.
 guidelines, context sources and translation memory exported from the web app's Settings page. Materials
 and run history live in `$ETA_DATA_DIR` (default `~/.experttranslate`) as one JSON file per table. Set
 `ETA_LOG_LEVEL=debug` for JSON-lines diagnostics on stderr; run `eta --help` for every flag.
+
+## Server mode
+
+`apps/server` runs the same engine behind an HTTP endpoint so a team can share one OpenRouter key
+without putting it in every browser:
+
+```bash
+OPENROUTER_API_KEY=sk-or-... ETA_SERVER_TOKEN=change-me ETA_ALLOWED_ORIGINS=https://you.github.io npx eta-server
+```
+
+The server refuses to start without `ETA_SERVER_TOKEN` unless `ETA_ALLOW_ANONYMOUS=true` is set, listens on
+`127.0.0.1:8787` by default (`ETA_HOST`, `PORT`), and keeps results in `ETA_DATA_DIR`. In the web app, Settings →
+Server takes the URL and token; from then on jobs are posted to `/api/jobs` with the materials they reference
+and progress streams back over SSE, while results still land in the browser's history. The token is never
+included in exports. Put the server behind HTTPS before exposing it beyond localhost.
 
 ## Offline shell
 

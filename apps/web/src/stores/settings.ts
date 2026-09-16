@@ -36,6 +36,9 @@ export type Settings = {
   audience: string
   formality: 'auto' | 'formal' | 'informal'
   preserveFormatting: 'true' | 'false'
+  /** Base URL of an ExpertTranslateAI server; empty runs the engine in this browser. */
+  serverUrl: string
+  serverToken: string
 }
 
 export { DEFAULT_MODEL }
@@ -66,7 +69,11 @@ export const $settings = persistentMap<Settings>('eta.settings.', {
   audience: '',
   formality: 'auto',
   preserveFormatting: 'true',
+  serverUrl: '',
+  serverToken: '',
 })
+
+export const usesServer = (s: Pick<Settings, 'serverUrl'>): boolean => s.serverUrl.trim() !== ''
 
 const jsonListCodec = <T>(isItem: (x: unknown) => x is T) => ({
   encode: (value: T[]): string => JSON.stringify(value),

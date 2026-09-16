@@ -138,7 +138,9 @@ const EXPORTABLE_SETTING_PREFIXES = [
   'eta.sourceDraft',
 ]
 const isExportableSetting = (key: string): boolean =>
-  EXPORTABLE_SETTING_PREFIXES.some((p) => key.startsWith(p)) && !key.includes('openrouter')
+  EXPORTABLE_SETTING_PREFIXES.some((p) => key.startsWith(p)) &&
+  !key.includes('openrouter') &&
+  !key.endsWith('serverToken')
 
 export async function exportAll(database: EtaDatabase = db): Promise<ExportBundle> {
   const tables: Record<string, unknown[]> = {}

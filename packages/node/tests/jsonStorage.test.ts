@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { noopLogger, type TargetResult, type TmEntry } from '@experttranslate/core'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { createJsonStorage } from '../src/adapters/jsonStorage.ts'
+import { createJsonStorage } from '../src/jsonStorage.ts'
 
 let dir: string
 beforeEach(async () => {
