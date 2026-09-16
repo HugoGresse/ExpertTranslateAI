@@ -571,6 +571,8 @@ Status: phases 0–6 are implemented. Progress events now carry a `targetKey` (`
 **Phase 7 — Server option (later, out of v1 scope)**
 `apps/server`: Node adapters (`SqliteStorage` or Postgres, `NodeFetch`, server-held OpenRouter key), Hono or Astro SSR endpoint streaming `ProgressEvent`s over SSE, a `RemoteEngine` adapter in `apps/web` that talks to it instead of running core in-browser. Enables team-shared glossaries/TM, unrestricted context fetching (no CORS), and CLI/CI usage. No change to core.
 
+
+Status: the first half of this phase ships as `apps/cli`: Node adapters (`JsonStorage` with one JSON file per table, `nodeFetch`, JSON-lines stderr logger), an `eta` binary that Node runs directly through built-in type stripping (core constructors use explicit fields for that), `translate` with stdin/file input and per-target output files, `models`, `key`, and `import` of the web export bundle. No core changes were needed. The SSE server endpoint and the `RemoteEngine` browser adapter remain future work.
 ---
 
 ## 12. Risks and mitigations

@@ -1,9 +1,11 @@
 import { createParser, type EventSourceMessage } from 'eventsource-parser'
 
 export class StreamIdleTimeoutError extends Error {
-  constructor(readonly idleMs: number) {
+  readonly idleMs: number
+  constructor(idleMs: number) {
     super(`No data received from the model for ${Math.round(idleMs / 1000)}s`)
     this.name = 'StreamIdleTimeoutError'
+    this.idleMs = idleMs
   }
 }
 

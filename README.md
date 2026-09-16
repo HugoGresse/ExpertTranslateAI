@@ -10,6 +10,7 @@ See [PLAN.md](PLAN.md) for the full design and roadmap, and `Architecture cœur.
 ```
 packages/core   engine: chunking, prompts, OpenRouter client, pipeline (pure TypeScript, runs in browser or Node)
 apps/web        Astro + React UI, browser adapters (IndexedDB storage, key vault, PKCE auth)
+apps/cli        Node front end for the same engine (JSON file storage, stdin/stdout, web export import)
 ```
 
 ## Develop
@@ -25,7 +26,21 @@ Other scripts: `npm test`, `npm run lint` (Biome), `npm run lint:fix`, `npm run 
 TypeScript 7 (native compiler) is used everywhere; `astro check` does not support it yet, so the web app is
 type-checked with `tsc` after `astro sync` and `.astro` files are validated by the build.
 
-Requires Node 22.12 or newer.
+Requires Node 22.18 or newer (the CLI runs TypeScript directly through Node's built-in type stripping).
+
+## Command line
+
+The CLI runs the exact same core through Node adapters, which is the proof that the engine has no browser
+dependency. It needs Node 22.18 or newer and `OPENROUTER_API_KEY` in the environment.
+
+```bash
+OPENROUTER_API_KEY=sk-or-... npx eta translate README.md --to fr,es-MX --model deepseek/deepseek-v4-flash-0731 --out translated
+```
+
+Other commands: `eta models --filter claude`, `eta key`, and `eta import export.json` to load the glossary,
+guidelines, context sources and translation memory exported from the web app's Settings page. Materials
+and run history live in `$ETA_DATA_DIR` (default `~/.experttranslate`) as one JSON file per table. Set
+`ETA_LOG_LEVEL=debug` for JSON-lines diagnostics on stderr; run `eta --help` for every flag.
 
 ## Offline shell
 

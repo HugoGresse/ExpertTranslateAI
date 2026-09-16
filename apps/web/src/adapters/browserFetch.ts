@@ -2,11 +2,13 @@ import type { FetchPort } from '@experttranslate/core'
 import { logger } from './logger'
 
 export class CorsBlockedError extends Error {
-  constructor(readonly url: string) {
+  readonly url: string
+  constructor(url: string) {
     super(
       'The request failed in the browser: the site may block cross-origin requests (CORS) or be unreachable. Paste the content or upload the file instead.',
     )
     this.name = 'CorsBlockedError'
+    this.url = url
   }
 }
 

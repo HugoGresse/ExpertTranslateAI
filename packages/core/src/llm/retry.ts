@@ -1,23 +1,26 @@
 import { StreamIdleTimeoutError } from './sse.ts'
 
 export class LlmHttpError extends Error {
-  constructor(
-    readonly status: number,
-    readonly bodyText: string,
-    readonly retryAfterMs: number | null,
-  ) {
+  readonly status: number
+  readonly bodyText: string
+  readonly retryAfterMs: number | null
+  constructor(status: number, bodyText: string, retryAfterMs: number | null) {
     super(`OpenRouter HTTP ${status}: ${bodyText.slice(0, 300)}`)
     this.name = 'LlmHttpError'
+    this.status = status
+    this.bodyText = bodyText
+    this.retryAfterMs = retryAfterMs
   }
 }
 
 export class LlmStreamError extends Error {
-  constructor(
-    readonly providerMessage: string,
-    readonly code: number | null,
-  ) {
+  readonly providerMessage: string
+  readonly code: number | null
+  constructor(providerMessage: string, code: number | null) {
     super(`OpenRouter stream error: ${providerMessage}`)
     this.name = 'LlmStreamError'
+    this.providerMessage = providerMessage
+    this.code = code
   }
 }
 

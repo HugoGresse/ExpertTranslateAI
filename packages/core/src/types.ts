@@ -218,12 +218,13 @@ export interface QualityScore {
 }
 
 export class BudgetExceededError extends Error {
-  constructor(
-    readonly spentUsd: number,
-    readonly budgetUsd: number,
-  ) {
+  readonly spentUsd: number
+  readonly budgetUsd: number
+  constructor(spentUsd: number, budgetUsd: number) {
     super(`Budget of $${budgetUsd.toFixed(4)} exceeded (spent $${spentUsd.toFixed(4)})`)
     this.name = 'BudgetExceededError'
+    this.spentUsd = spentUsd
+    this.budgetUsd = budgetUsd
   }
 }
 
