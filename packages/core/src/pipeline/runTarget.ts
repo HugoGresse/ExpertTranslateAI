@@ -1,12 +1,20 @@
 import { addUsage, emptyCost } from '../llm/pricing.ts'
-import type { CostSummary, Escalation, Target, TargetResult, TranslationJob } from '../types.ts'
+import type {
+  BackTranslation,
+  CostSummary,
+  Escalation,
+  Target,
+  TargetResult,
+  TranslationJob,
+} from '../types.ts'
 import { type Evaluation, evaluateOutcomes } from './audit.ts'
 import type { StageContext } from './call.ts'
 import { decideEscalation, nextDifficulty } from './escalation.ts'
 import { type Plan, planFor } from './plan.ts'
 import { type ChunkOutcome, processChunk } from './processChunk.ts'
 import { type JobMaterials, setupTarget, type TargetSetup } from './setupTarget.ts'
-import { isAbort } from './violations.ts'
+import { backTranslateTarget } from './stages/backTranslate.ts'
+import { degrade, isAbort } from './violations.ts'
 
 export type { JobMaterials } from './setupTarget.ts'
 
@@ -111,6 +119,21 @@ export async function runTarget(
       ? await evaluateOutcomes(job, escalated.plan, setup, models, escalated.outcomes, ctx)
       : firstEvaluation
   const outcomes = escalated.outcomes
+  const backTranslation: BackTranslation | null =
+    escalated.plan.backTranslate || job.options.backTranslate
+      ? await backTranslateTarget(
+          {
+            lang: target.lang,
+            model: models.backTranslator,
+            sourceLang: setup.sourceLang,
+            targetLabel: setup.targetLabel,
+            sourceText: job.sourceText,
+            finalText: evaluation.finalText,
+            materials: setup.materials,
+          },
+          ctx,
+        ).catch((error: unknown) => degrade(error, 'backtranslate', target.lang, ctx, null))
+      : null
 
   const cost = ctx.trace.reduce<CostSummary>((acc, t) => addUsage(acc, t.usage), emptyCost())
   return {
@@ -132,6 +155,7 @@ export async function runTarget(
     memoryHits: setup.memoryHits,
     disagreements: outcomes.flatMap((o) => o.disagreements),
     escalations: escalated.escalations,
+    backTranslation,
     cost,
     trace: [...materials.trace, ...ctx.trace],
     status: 'done',

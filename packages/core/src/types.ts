@@ -28,6 +28,45 @@ export interface JobOptions {
   autoEscalate: boolean
   escalationConfidence: number
   routing: RouterRule[]
+  backTranslate: boolean
+  promptOverrides: PromptOverrides
+}
+
+export type DeltaKind = 'loss' | 'addition' | 'shift'
+
+export interface BackTranslationDelta {
+  source: string
+  back: string
+  kind: DeltaKind
+  severity: 'minor' | 'major'
+  note: string
+}
+
+export interface BackTranslation {
+  text: string
+  model: string
+  deltas: BackTranslationDelta[]
+}
+
+export interface EvalRecord {
+  id: string
+  jobId: string
+  lang: LanguageCode
+  createdAt: number
+  domain: Domain | 'auto'
+  difficulty: Difficulty
+  models: RoleModels
+  score: QualityScore | null
+  issueCounts: Record<string, number>
+  violations: number
+  disagreements: number
+  escalated: boolean
+  costUsd: number
+  calls: number
+  words: number
+  promptOverrideHash: string
+  humanEdited: boolean
+  editDistance: number | null
 }
 
 export interface RouterRule {
@@ -249,10 +288,24 @@ export interface RoleModels {
   judge: string
   finalizer: string
   scorer: string
+  backTranslator: string
   helper: string
 }
 
 export type Role = keyof RoleModels
+
+export type PromptStage =
+  | 'brief'
+  | 'translate'
+  | 'review'
+  | 'guidelines'
+  | 'judge'
+  | 'finalize'
+  | 'score'
+  | 'backtranslate'
+  | 'deltas'
+
+export type PromptOverrides = Partial<Record<PromptStage, string>>
 
 export interface TranslationJob {
   id: string
@@ -328,6 +381,7 @@ export interface TargetResult {
   memoryHits: MemoryHit[]
   disagreements: Disagreement[]
   escalations: Escalation[]
+  backTranslation: BackTranslation | null
   cost: CostSummary
   trace: TraceEvent[]
   status: 'done' | 'failed' | 'cancelled'
@@ -343,6 +397,7 @@ export type StageName =
   | 'judge'
   | 'finalize'
   | 'score'
+  | 'backtranslate'
 
 export type ProgressEvent =
   | { type: 'job-started'; jobId: string; targets: Target[] }

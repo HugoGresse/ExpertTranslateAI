@@ -3,6 +3,7 @@ import type {
   GlossaryScope,
   GuidelineSet,
   JobEstimate,
+  PromptOverrides,
   RouterRule,
   Target,
   TranslationJob,
@@ -19,6 +20,7 @@ import { useRepo } from '../hooks/useRepo'
 import { pickOneOf } from '../lib/guards'
 import { $run, applyProgress, idleRun } from '../stores/run'
 import {
+  $promptOverrides,
   $routing,
   $selectedContextIds,
   $selectedGlossaryIds,
@@ -58,6 +60,7 @@ interface Selection {
   glossaryScopeIds: string[]
   useMemory: boolean
   routing: RouterRule[]
+  promptOverrides: PromptOverrides
 }
 
 const buildJob = (
@@ -89,6 +92,8 @@ const buildJob = (
       autoEscalate: s.autoEscalate === 'true',
       escalationConfidence: numberSetting(s.escalationConfidence, 60, 0),
       routing: selection.routing,
+      backTranslate: s.backTranslate === 'true',
+      promptOverrides: selection.promptOverrides,
       formality: s.formality,
       ...(s.tone ? { tone: s.tone } : {}),
       ...(s.audience ? { audience: s.audience } : {}),
@@ -108,6 +113,7 @@ export const TranslateWorkspace: FC = () => {
   const selectedGlossaryIds = useStore($selectedGlossaryIds)
   const useMemory = useStore($useMemory) === 'true'
   const routing = useStore($routing)
+  const promptOverrides = useStore($promptOverrides)
   const glossaryScopes = useRepo<GlossaryScope>(storage.glossaryScopes)
   const contexts = useRepo<ContextSource>(storage.contexts)
   const guidelines = useRepo<GuidelineSet>(storage.guidelines)
@@ -127,6 +133,7 @@ export const TranslateWorkspace: FC = () => {
       ),
       useMemory,
       routing,
+      promptOverrides,
     }),
     [
       selectedContextIds,
@@ -134,6 +141,7 @@ export const TranslateWorkspace: FC = () => {
       selectedGlossaryIds,
       useMemory,
       routing,
+      promptOverrides,
       contexts.items,
       guidelines.items,
       glossaryScopes.items,
@@ -264,6 +272,16 @@ export const TranslateWorkspace: FC = () => {
                 onChange={(e) => $settings.setKey('budgetUsd', e.target.value)}
               />
             </Field>
+            <label className="flex items-center gap-2 text-sm sm:col-span-2">
+              <input
+                type="checkbox"
+                checked={settings.backTranslate === 'true'}
+                onChange={(e) =>
+                  $settings.setKey('backTranslate', e.target.checked ? 'true' : 'false')
+                }
+              />
+              Back-translate and list meaning deltas (always on for critical)
+            </label>
             <Field label="Formality">
               <select
                 className={inputClass}

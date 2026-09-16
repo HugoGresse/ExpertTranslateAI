@@ -15,6 +15,7 @@ type RoleKey = keyof Pick<
   | 'judgeModel'
   | 'finalizerModel'
   | 'scorerModel'
+  | 'backTranslatorModel'
   | 'helperModel'
 >
 
@@ -37,6 +38,11 @@ const ROLES: Array<{ key: RoleKey; label: string; hint: string }> = [
     hint: 'Produces the final text from the base candidate and the review.',
   },
   { key: 'scorerModel', label: 'Scorer', hint: 'Grades the final translation on six dimensions.' },
+  {
+    key: 'backTranslatorModel',
+    label: 'Back-translator',
+    hint: 'Translates the result back to the source language and lists meaning deltas (critical, or when enabled).',
+  },
   {
     key: 'helperModel',
     label: 'Helper',
@@ -163,6 +169,7 @@ const ROLE_KEYS: Role[] = [
   'judge',
   'finalizer',
   'scorer',
+  'backTranslator',
   'helper',
 ]
 

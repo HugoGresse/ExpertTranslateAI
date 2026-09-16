@@ -26,6 +26,7 @@ export { emptyCost, findPricing, sumCosts, usageCost } from './llm/pricing.ts'
 export { LlmHttpError, LlmStreamError } from './llm/retry.ts'
 export { StreamIdleTimeoutError } from './llm/sse.ts'
 export { DIFFICULTY_ORDER, decideEscalation, nextDifficulty } from './pipeline/escalation.ts'
+export { buildEvalRecord, promptOverrideHash, wordCount } from './pipeline/evalRecord.ts'
 export { PLANS, type Plan, planFor } from './pipeline/plan.ts'
 export { routeModels } from './pipeline/router.ts'
 export { resolveSourceLang } from './pipeline/setupTarget.ts'
@@ -43,7 +44,14 @@ export type {
 } from './ports.ts'
 export { noopLogger, systemClock } from './ports.ts'
 export { assembleSystem, type SystemBlocks } from './prompts/assembleSystem.ts'
-export { roleLabel } from './prompts/materials.ts'
+export { buildBackTranslatePrompt, buildDeltaPrompt } from './prompts/backTranslate.ts'
+export { buildBriefPrompt } from './prompts/brief.ts'
+export { buildFinalizePrompt } from './prompts/finalize.ts'
+export { buildGuidelineCheckPrompt } from './prompts/guidelineCheck.ts'
+export { buildJudgePrompt } from './prompts/judge.ts'
+export { roleLabel, roleLines } from './prompts/materials.ts'
+export { buildReviewPrompt } from './prompts/review.ts'
+export { buildScorePrompt } from './prompts/score.ts'
 export {
   buildTranslatePrompt,
   type Prompt,

@@ -1,6 +1,6 @@
 import type { JobOptions, Target } from '../types.ts'
 import { assembleSystem } from './assembleSystem.ts'
-import { materialBlocks, type PromptMaterials } from './materials.ts'
+import { materialBlocks, type PromptMaterials, roleLines } from './materials.ts'
 
 export interface TranslatePromptInput {
   sourceLang: string
@@ -35,9 +35,9 @@ function styleLines(options: TranslatePromptInput['options']): string[] {
 
 export function translateSystemPrompt(input: TranslatePromptInput): string {
   return assembleSystem({
-    role: [
+    role: roleLines(input.materials, 'translate', [
       `You are an expert linguist, specializing in translation from ${input.sourceLang} to ${targetLabel(input.target)}.`,
-    ],
+    ]),
     ...materialBlocks(input.materials),
     task: styleLines(input.options),
   })

@@ -2,6 +2,7 @@ import type {
   ChatChunk,
   ChatRequest,
   ContextSource,
+  EvalRecord,
   GlossaryEntry,
   GlossaryScope,
   GuidelineSet,
@@ -41,6 +42,7 @@ export interface StoragePort {
   glossaryScopes: Repo<GlossaryScope>
   glossaryEntries: Repo<GlossaryEntry>
   tm: Repo<TmEntry>
+  evals: Repo<EvalRecord>
 }
 
 export interface FetchPort {

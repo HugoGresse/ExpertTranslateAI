@@ -1,4 +1,12 @@
-import type { Brief, Candidate, GuidelineViolation, Issue, TranslatorRole } from '../types.ts'
+import type {
+  Brief,
+  Candidate,
+  GuidelineViolation,
+  Issue,
+  PromptOverrides,
+  PromptStage,
+  TranslatorRole,
+} from '../types.ts'
 
 export interface PromptMaterials {
   contextBlock?: string
@@ -6,6 +14,16 @@ export interface PromptMaterials {
   glossaryBlock?: string
   memoryBlock?: string
   brief?: Brief | null
+  overrides?: PromptOverrides
+}
+
+export function roleLines(
+  m: PromptMaterials | undefined,
+  stage: PromptStage,
+  defaults: string[],
+): string[] {
+  const override = m?.overrides?.[stage]?.trim()
+  return override ? override.split('\n') : defaults
 }
 
 export function formatBriefBlock(brief: Brief | null | undefined): string {

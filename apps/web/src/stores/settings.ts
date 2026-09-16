@@ -1,4 +1,11 @@
-import type { Domain, ReasoningEffort, RoleModels, RouterRule, Target } from '@experttranslate/core'
+import type {
+  Domain,
+  PromptOverrides,
+  ReasoningEffort,
+  RoleModels,
+  RouterRule,
+  Target,
+} from '@experttranslate/core'
 import { persistentAtom, persistentMap } from '@nanostores/persistent'
 
 export type Settings = {
@@ -9,6 +16,7 @@ export type Settings = {
   judgeModel: string
   finalizerModel: string
   scorerModel: string
+  backTranslatorModel: string
   helperModel: string
   difficulty: 'auto' | 'simple' | 'normal' | 'hard'
   domain: Domain | 'auto'
@@ -16,6 +24,7 @@ export type Settings = {
   reasoningEffort: ReasoningEffort
   autoEscalate: 'true' | 'false'
   escalationConfidence: string
+  backTranslate: 'true' | 'false'
   contextTokenBudget: string
   guidelinesTokenBudget: string
   sourceLang: string
@@ -37,6 +46,7 @@ export const $settings = persistentMap<Settings>('eta.settings.', {
   judgeModel: '',
   finalizerModel: '',
   scorerModel: '',
+  backTranslatorModel: '',
   helperModel: '',
   difficulty: 'auto',
   domain: 'auto',
@@ -44,6 +54,7 @@ export const $settings = persistentMap<Settings>('eta.settings.', {
   reasoningEffort: 'low',
   autoEscalate: 'true',
   escalationConfidence: '60',
+  backTranslate: 'false',
   contextTokenBudget: '4000',
   guidelinesTokenBudget: '1500',
   sourceLang: 'auto',
@@ -108,6 +119,7 @@ export function roleModels(s: Settings): RoleModels {
     judge: s.judgeModel || s.reviewerModel || helper,
     finalizer: s.finalizerModel || a,
     scorer: s.scorerModel || s.reviewerModel || helper,
+    backTranslator: s.backTranslatorModel || s.translatorBModel || s.reviewerModel || helper,
     helper,
   }
 }
@@ -129,3 +141,24 @@ const routingCodec = {
 }
 
 export const $routing = persistentAtom<RouterRule[]>('eta.routing', [], routingCodec)
+
+const overridesCodec = {
+  encode: (value: PromptOverrides): string => JSON.stringify(value),
+  decode: (raw: string): PromptOverrides => {
+    try {
+      const parsed: unknown = JSON.parse(raw)
+      if (!isRecord(parsed)) return {}
+      const out: Record<string, string> = {}
+      for (const [k, v] of Object.entries(parsed)) if (typeof v === 'string') out[k] = v
+      return out as PromptOverrides
+    } catch {
+      return {}
+    }
+  },
+}
+
+export const $promptOverrides = persistentAtom<PromptOverrides>(
+  'eta.promptOverrides',
+  {},
+  overridesCodec,
+)

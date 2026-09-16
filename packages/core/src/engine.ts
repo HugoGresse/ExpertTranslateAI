@@ -2,6 +2,7 @@ import { ensureDigests } from './context/prepare.ts'
 import { addUsage, emptyCost, findPricing, usageCost } from './llm/pricing.ts'
 import { createBudgetTracker } from './pipeline/budget.ts'
 import type { StageContext } from './pipeline/call.ts'
+import { buildEvalRecord } from './pipeline/evalRecord.ts'
 import { createEventQueue } from './pipeline/eventQueue.ts'
 import { type Plan, planFor, stageCallsPerChunk } from './pipeline/plan.ts'
 import { routeModels } from './pipeline/router.ts'
@@ -175,6 +176,9 @@ export function createEngine(ports: EnginePorts): Engine {
                 targetCtx,
               )
               await ports.storage.results.put(result)
+              await ports.storage.evals.put(
+                buildEvalRecord(job, prepared.materials.models, result, ports.clock.now()),
+              )
               events.emit({ type: 'target-done', lang: target.lang, result })
               return result
             } catch (error) {

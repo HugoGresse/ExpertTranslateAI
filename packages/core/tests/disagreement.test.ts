@@ -149,6 +149,7 @@ describe('routeModels', () => {
     judge: 'j',
     finalizer: 'f',
     scorer: 's',
+    backTranslator: 'bt',
     helper: 'h',
   }
   it('overrides roles for the matching domain only', () => {

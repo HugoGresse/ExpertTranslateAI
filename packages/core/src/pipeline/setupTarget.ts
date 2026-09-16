@@ -118,6 +118,7 @@ export function setupTarget(
       ...(guidelines.text ? { guidelinesBlock: guidelines.text } : {}),
       ...(glossaryBlock ? { glossaryBlock } : {}),
       ...(memoryBlock ? { memoryBlock } : {}),
+      overrides: job.options.promptOverrides,
     },
     sets,
     rules: numberRules(sets),

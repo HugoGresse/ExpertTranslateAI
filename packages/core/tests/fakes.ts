@@ -3,6 +3,7 @@ import type {
   ChatChunk,
   ChatRequest,
   ContextSource,
+  EvalRecord,
   GlossaryEntry,
   GlossaryScope,
   GuidelineSet,
@@ -78,6 +79,7 @@ export const createMemoryStorage = (): StoragePort => ({
   glossaryScopes: memoryRepo<GlossaryScope>(),
   glossaryEntries: memoryRepo<GlossaryEntry>(),
   tm: memoryRepo<TmEntry>(),
+  evals: memoryRepo<EvalRecord>(),
 })
 
 export const sampleJob = (overrides: Partial<TranslationJob> = {}): TranslationJob => ({
@@ -96,6 +98,7 @@ export const sampleJob = (overrides: Partial<TranslationJob> = {}): TranslationJ
     judge: 'test/judge',
     finalizer: 'test/finalizer',
     scorer: 'test/scorer',
+    backTranslator: 'test/back',
     helper: 'test/helper',
   },
   options: {
@@ -112,6 +115,8 @@ export const sampleJob = (overrides: Partial<TranslationJob> = {}): TranslationJ
     autoEscalate: false,
     escalationConfidence: 60,
     routing: [],
+    backTranslate: false,
+    promptOverrides: {},
   },
   status: 'queued',
   ...overrides,

@@ -1,5 +1,6 @@
 import type {
   ContextSource,
+  EvalRecord,
   GlossaryEntry,
   GlossaryScope,
   GuidelineSet,
@@ -27,6 +28,7 @@ export class EtaDatabase extends Dexie {
   glossaryScopes!: EntityTable<GlossaryScope, 'id'>
   glossaryEntries!: EntityTable<GlossaryEntry, 'id'>
   tm!: EntityTable<TmEntry, 'id'>
+  evals!: EntityTable<EvalRecord, 'id'>
 
   constructor() {
     super('experttranslateai')
@@ -43,6 +45,9 @@ export class EtaDatabase extends Dexie {
       glossaryScopes: 'id, createdAt, parentId, level',
       glossaryEntries: 'id, createdAt, scopeId, lang',
       tm: 'id, createdAt, sourceLang, targetLang',
+    })
+    this.version(4).stores({
+      evals: 'id, createdAt, jobId, lang, difficulty',
     })
   }
 }
@@ -98,7 +103,59 @@ export function createDexieStorage(database: EtaDatabase = db): StoragePort {
     glossaryScopes: tableRepo<GlossaryScope>(database.glossaryScopes),
     glossaryEntries: tableRepo<GlossaryEntry>(database.glossaryEntries),
     tm: tableRepo<TmEntry>(database.tm),
+    evals: tableRepo<EvalRecord>(database.evals),
   }
 }
 
 export const storage: StoragePort = createDexieStorage()
+
+export const ALL_TABLES = [
+  'jobs',
+  'results',
+  'contextSources',
+  'guidelineSets',
+  'glossaryScopes',
+  'glossaryEntries',
+  'tm',
+  'evals',
+] as const
+export type ExportTable = (typeof ALL_TABLES)[number]
+
+export interface ExportBundle {
+  version: 1
+  exportedAt: number
+  tables: Record<ExportTable, unknown[]>
+  settings: Record<string, string>
+}
+
+export async function exportAll(database: EtaDatabase = db): Promise<ExportBundle> {
+  const tables = {} as Record<ExportTable, unknown[]>
+  for (const name of ALL_TABLES) tables[name] = await database.table(name).toArray()
+  const settings: Record<string, string> = {}
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i)
+    if (key?.startsWith('eta.') && !key.includes('openrouter'))
+      settings[key] = localStorage.getItem(key) ?? ''
+  }
+  return { version: 1, exportedAt: Date.now(), tables, settings }
+}
+
+export async function importAll(bundle: ExportBundle, database: EtaDatabase = db): Promise<number> {
+  let count = 0
+  await database.transaction(
+    'rw',
+    ALL_TABLES.map((n) => database.table(n)),
+    async () => {
+      for (const name of ALL_TABLES) {
+        const rows = bundle.tables[name] ?? []
+        if (rows.length === 0) continue
+        await database.table(name).bulkPut(rows)
+        count += rows.length
+      }
+    },
+  )
+  for (const [key, value] of Object.entries(bundle.settings ?? {})) {
+    if (key.startsWith('eta.') && !key.includes('openrouter')) localStorage.setItem(key, value)
+  }
+  return count
+}

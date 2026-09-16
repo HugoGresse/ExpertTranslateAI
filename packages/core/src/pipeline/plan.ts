@@ -4,6 +4,7 @@ export interface Plan {
   difficulty: Difficulty
   translators: TranslatorRole[]
   review: boolean
+  reviewers: number
   guidelineCheck: boolean
   judge: boolean
   finalize: boolean
@@ -16,6 +17,7 @@ export const PLANS: Record<Difficulty, Plan> = {
     difficulty: 'simple',
     translators: ['translatorA'],
     review: false,
+    reviewers: 0,
     guidelineCheck: false,
     judge: false,
     finalize: false,
@@ -26,6 +28,7 @@ export const PLANS: Record<Difficulty, Plan> = {
     difficulty: 'normal',
     translators: ['translatorA', 'translatorB'],
     review: true,
+    reviewers: 1,
     guidelineCheck: true,
     judge: false,
     finalize: true,
@@ -36,6 +39,7 @@ export const PLANS: Record<Difficulty, Plan> = {
     difficulty: 'hard',
     translators: ['translatorA', 'translatorB', 'translatorC'],
     review: true,
+    reviewers: 1,
     guidelineCheck: true,
     judge: true,
     finalize: true,
@@ -46,6 +50,7 @@ export const PLANS: Record<Difficulty, Plan> = {
     difficulty: 'critical',
     translators: ['translatorA', 'translatorB', 'translatorC'],
     review: true,
+    reviewers: 2,
     guidelineCheck: true,
     judge: true,
     finalize: true,
@@ -59,7 +64,7 @@ export const planFor = (difficulty: Difficulty): Plan => PLANS[difficulty]
 export function stageCallsPerChunk(plan: Plan): number {
   return (
     plan.translators.length +
-    (plan.review ? 1 : 0) +
+    plan.reviewers +
     (plan.guidelineCheck ? 1 : 0) +
     (plan.judge ? 1 : 0) +
     (plan.finalize ? 1 : 0)

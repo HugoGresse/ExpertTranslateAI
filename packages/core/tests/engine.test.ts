@@ -525,3 +525,137 @@ describe('engine.run review fixes', () => {
     expect(llm.calls[0]?.request.model).toBe('legal/helper')
   })
 })
+
+describe('engine.run phase 5', () => {
+  const brief = JSON.stringify({
+    detectedLang: 'en',
+    domain: 'legal',
+    difficulty: 'critical',
+    summary: '',
+    tone: '',
+    audience: '',
+    keyTerms: [],
+    risks: [],
+  })
+  const review = (model: string): string =>
+    JSON.stringify({
+      issues: [
+        {
+          candidate: 'translatorB',
+          category: 'accuracy',
+          severity: 'major',
+          explanation: `from ${model}`,
+        },
+      ],
+      suggestions: [],
+      preferred: 'translatorA',
+    })
+  const scoreJson = JSON.stringify({
+    fidelity: 90,
+    terminology: 90,
+    grammar: 90,
+    naturalness: 90,
+    register: 90,
+    consistency: 90,
+    confidence: 90,
+    notes: [],
+  })
+
+  const reply = (req: { model: string; messages: { content: string }[] }): string => {
+    const system = req.messages[0]?.content ?? ''
+    switch (req.model) {
+      case 'test/helper':
+        return brief
+      case 'test/model':
+      case 'test/model-b':
+      case 'test/model-c':
+      case 'test/finalizer':
+        return 'Il y a douze clauses.'
+      case 'test/reviewer':
+        return system.includes('audit') ? '{"violations": []}' : review('reviewer')
+      case 'test/judge':
+        return system.includes('reviewing')
+          ? review('judge')
+          : JSON.stringify({ winner: 'translatorA', rationale: 'ok' })
+      case 'test/scorer':
+        return scoreJson
+      case 'test/back':
+        return system.includes('compare')
+          ? JSON.stringify({
+              deltas: [
+                {
+                  source: 'twelve',
+                  back: 'douze',
+                  kind: 'shift',
+                  severity: 'minor',
+                  note: 'number spelled out',
+                },
+              ],
+            })
+          : 'There are twelve clauses.'
+      default:
+        return 'x'
+    }
+  }
+
+  it('runs two reviewers and back-translation on critical, writes an eval record, applies prompt overrides', async () => {
+    const llm = createFakeLlm(reply)
+    const storage = createMemoryStorage()
+    const engine = createEngine({ llm, storage, clock: { now: () => 7 }, logger: noopLogger })
+    const job = sampleJob({
+      targets: [{ lang: 'fr' }],
+      difficulty: 'auto',
+      sourceText: 'There are twelve clauses.',
+    })
+    job.options.promptOverrides = {
+      translate: 'You are a sworn legal translator.\nKeep numbers as written.',
+    }
+    const events = await collect(engine.run(job))
+    const done = events.find((e) => e.type === 'target-done')
+    if (done?.type !== 'target-done') throw new Error('no result')
+    expect(done.result.plan.difficulty).toBe('critical')
+    expect(done.result.reviews[0]?.issues.map((i) => i.explanation).sort()).toEqual([
+      'from judge',
+      'from reviewer',
+    ])
+    expect(done.result.backTranslation?.text).toBe('There are twelve clauses.')
+    expect(done.result.backTranslation?.deltas[0]?.kind).toBe('shift')
+    const translatePrompt =
+      llm.calls.find((c) => c.request.model === 'test/model')?.request.messages[0]?.content ?? ''
+    expect(
+      translatePrompt.startsWith('You are a sworn legal translator.\nKeep numbers as written.'),
+    ).toBe(true)
+    const evals = await storage.evals.list()
+    expect(evals).toHaveLength(1)
+    expect(evals[0]).toMatchObject({
+      jobId: 'job-1',
+      lang: 'fr',
+      difficulty: 'critical',
+      domain: 'legal',
+      words: 4,
+      humanEdited: false,
+    })
+    expect(evals[0]?.promptOverrideHash).not.toBe('default')
+    expect(evals[0]?.issueCounts).toEqual({ accuracy: 2 })
+  })
+
+  it('back-translates on request even at simple difficulty and degrades when it fails', async () => {
+    const llm = createFakeLlm((req) => (req.model === 'test/back' ? 'not json {' : 'Bonjour'))
+    const engine = createEngine({
+      llm,
+      storage: createMemoryStorage(),
+      clock: { now: () => 1 },
+      logger: noopLogger,
+    })
+    const job = sampleJob({ targets: [{ lang: 'fr' }], difficulty: 'simple', sourceText: 'Hello' })
+    job.options.backTranslate = true
+    const events = await collect(engine.run(job))
+    const done = events.find((e) => e.type === 'target-done')
+    if (done?.type !== 'target-done') throw new Error('no result')
+    expect(done.result.finalText).toBe('Bonjour')
+    expect(done.result.backTranslation).toBeNull()
+    expect(llm.calls.filter((c) => c.request.model === 'test/back').length).toBeGreaterThanOrEqual(
+      2,
+    )
+  })
+})

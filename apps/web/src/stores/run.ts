@@ -68,6 +68,7 @@ const STAGE_LABEL: Record<StageName, string> = {
   judge: 'judging',
   finalize: 'finalizing',
   score: 'scoring',
+  backtranslate: 'back-translating',
 }
 
 export function applyProgress(event: ProgressEvent): void {

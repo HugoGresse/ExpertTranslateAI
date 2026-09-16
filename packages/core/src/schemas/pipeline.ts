@@ -94,6 +94,19 @@ export const scoreSchema = z.object({
   notes: listOr(z.string()),
 })
 
+export const deltaSchema = z.object({
+  deltas: listOr(
+    z.object({
+      source: textOr(''),
+      back: textOr(''),
+      kind: z.enum(['loss', 'addition', 'shift']).catch('shift'),
+      severity: z.enum(['minor', 'major']).catch('minor'),
+      note: textOr(''),
+    }),
+  ),
+})
+
+export type DeltaOutput = z.infer<typeof deltaSchema>
 export type BriefOutput = z.infer<typeof briefSchema>
 export type ReviewOutput = z.infer<typeof reviewSchema>
 export type GuidelineCheckOutput = z.infer<typeof guidelineCheckSchema>

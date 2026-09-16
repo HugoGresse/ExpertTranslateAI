@@ -7,6 +7,8 @@ import { $apiKey, forgetApiKey, maskKey, saveApiKey } from '../adapters/keyVault
 import { logger } from '../adapters/logger'
 import { useModels } from '../hooks/useModels'
 import { $settings } from '../stores/settings'
+import { DataCard } from './DataCard'
+import { KeyVaultCard } from './KeyVaultCard'
 import { ModelPicker } from './ModelPicker'
 import { RoleModelsCard } from './RoleModelsCard'
 import { Button, basePath, Card, Field, formatUsd, inputClass } from './ui'
@@ -65,6 +67,7 @@ const KeySection: FC = () => {
               Forget key
             </Button>
           </div>
+          <KeyVaultCard />
         </div>
       ) : (
         <div className="flex flex-col gap-3 text-sm">
@@ -102,6 +105,7 @@ export const SettingsPanel: FC = () => {
     <div className="grid gap-4 md:grid-cols-2">
       <KeySection />
       <RoleModelsCard />
+      <DataCard />
       <Card title="Defaults">
         <div className="flex flex-col gap-3">
           <Field label="Translator model">
