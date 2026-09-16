@@ -32,19 +32,19 @@ Non-goals (v1):
 
 ## 2. Stack
 
-| Concern | Choice | Version (checked 2026-09-16) |
-|---|---|---|
-| Framework | Astro, static output (`output: 'static'`) | `astro ^7.3.2` |
-| Islands | React 19 via `@astrojs/react` | `react ^19.3.0`, `@astrojs/react ^6.0.5` |
-| Styling | Tailwind 4 via Vite plugin (not `@astrojs/tailwind`, deprecated for v4) | `tailwindcss ^4.3.3`, `@tailwindcss/vite ^4.3.3` |
-| State | nanostores (+ `@nanostores/react`, `@nanostores/persistent`) | `nanostores ^1.5.3`, `@nanostores/react ^2.0.1`, `@nanostores/persistent ^1.3.5` |
-| Local DB | Dexie (IndexedDB) for glossary, TM, history, eval log | `dexie ^4.4.6` |
-| Validation | zod for LLM JSON outputs and settings import | `zod ^4.6.5` |
-| Tokens | `gpt-tokenizer` (client-side estimate, for chunking + cost preview) | `^4.0.0` |
-| Diff | `diff` (word-level diff for disagreement + review views) | `^9.0.0` |
-| SSE | `eventsource-parser` for OpenRouter streaming | `^4.1.1` |
-| Tests | vitest (unit), Playwright (e2e, mocked OpenRouter) | `vitest ^5.0.1`, `@playwright/test ^1.63.0` |
-| Lang | TypeScript strict, `@astrojs/check` | `typescript ^7.0.2` |
+| Concern    | Choice                                                                  | Version (checked 2026-09-16)                                                     |
+| ---------- | ----------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| Framework  | Astro, static output (`output: 'static'`)                               | `astro ^7.3.2`                                                                   |
+| Islands    | React 19 via `@astrojs/react`                                           | `react ^19.3.0`, `@astrojs/react ^6.0.5`                                         |
+| Styling    | Tailwind 4 via Vite plugin (not `@astrojs/tailwind`, deprecated for v4) | `tailwindcss ^4.3.3`, `@tailwindcss/vite ^4.3.3`                                 |
+| State      | nanostores (+ `@nanostores/react`, `@nanostores/persistent`)            | `nanostores ^1.5.3`, `@nanostores/react ^2.0.1`, `@nanostores/persistent ^1.3.5` |
+| Local DB   | Dexie (IndexedDB) for glossary, TM, history, eval log                   | `dexie ^4.4.6`                                                                   |
+| Validation | zod for LLM JSON outputs and settings import                            | `zod ^4.6.5`                                                                     |
+| Tokens     | `gpt-tokenizer` (client-side estimate, for chunking + cost preview)     | `^4.0.0`                                                                         |
+| Diff       | `diff` (word-level diff for disagreement + review views)                | `^9.0.0`                                                                         |
+| SSE        | `eventsource-parser` for OpenRouter streaming                           | `^4.1.1`                                                                         |
+| Tests      | vitest (unit), Playwright (e2e, mocked OpenRouter)                      | `vitest ^5.0.1`, `@playwright/test ^1.63.0`                                      |
+| Lang       | TypeScript strict, `@astrojs/check`                                     | `typescript ^6.0.3`                                                              |
 
 Rationale: Astro gives static pages, zero JS on docs/settings routes, React islands only where the app is interactive. No OpenAI SDK: raw `fetch` keeps bundle small and avoids the `dangerouslyAllowBrowser` flag.
 
@@ -125,100 +125,206 @@ Two paths, both local:
 ## 5. Domain model
 
 ```ts
-type LanguageCode = string;            // BCP-47: 'fr', 'pt-BR', 'zh-Hant'
-type Difficulty = 'simple' | 'normal' | 'hard' | 'critical';
-type Domain = 'general' | 'legal' | 'technical' | 'marketing' | 'medical' | 'literary' | 'ui';
+type LanguageCode = string // BCP-47: 'fr', 'pt-BR', 'zh-Hant'
+type Difficulty = 'simple' | 'normal' | 'hard' | 'critical'
+type Domain = 'general' | 'legal' | 'technical' | 'marketing' | 'medical' | 'literary' | 'ui'
 
 interface TranslationJob {
-  id: string;
-  createdAt: number;
-  sourceText: string;
-  sourceLang: LanguageCode | 'auto';
-  targets: { lang: LanguageCode; region?: string }[];   // region: 'Mexico' as in translation-agent
-  domain: Domain | 'auto';
-  difficulty: Difficulty | 'auto';
-  options: { tone?: string; audience?: string; formality?: 'formal' | 'informal' | 'auto'; preserveFormatting: boolean; backTranslate: boolean; glossaryScopeIds: string[]; contextSourceIds: string[]; guidelineSetIds: string[] };
-  status: 'queued' | 'running' | 'done' | 'failed' | 'cancelled';
+  id: string
+  createdAt: number
+  sourceText: string
+  sourceLang: LanguageCode | 'auto'
+  targets: { lang: LanguageCode; region?: string }[] // region: 'Mexico' as in translation-agent
+  domain: Domain | 'auto'
+  difficulty: Difficulty | 'auto'
+  options: {
+    tone?: string
+    audience?: string
+    formality?: 'formal' | 'informal' | 'auto'
+    preserveFormatting: boolean
+    backTranslate: boolean
+    glossaryScopeIds: string[]
+    contextSourceIds: string[]
+    guidelineSetIds: string[]
+  }
+  status: 'queued' | 'running' | 'done' | 'failed' | 'cancelled'
 }
 
-interface ContextSource {           // llms.txt, a Markdown URL, or an uploaded .md file
-  id: string;
-  name: string;
-  kind: 'llms-txt' | 'markdown-url' | 'markdown-file' | 'pasted';
-  url?: string;
-  rawText: string;                  // fetched / uploaded content
-  contentHash: string;
-  fetchedAt?: number;
-  condensed?: { text: string; model: string; tokenEstimate: number; forHash: string };  // LLM digest used when raw is too big
-  scope: GlossaryScope['level'];    // reuse the same hierarchy: global → language → client → project → document
-  scopeId?: string;
+interface ContextSource {
+  // llms.txt, a Markdown URL, or an uploaded .md file
+  id: string
+  name: string
+  kind: 'llms-txt' | 'markdown-url' | 'markdown-file' | 'pasted'
+  url?: string
+  rawText: string // fetched / uploaded content
+  contentHash: string
+  fetchedAt?: number
+  condensed?: { text: string; model: string; tokenEstimate: number; forHash: string } // LLM digest used when raw is too big
+  scope: GlossaryScope['level'] // reuse the same hierarchy: global → language → client → project → document
+  scopeId?: string
 }
 
-interface GuidelineSet {            // rules the translation MUST respect, verified after finalize
-  id: string;
-  name: string;
-  scope: GlossaryScope['level'];
-  scopeId?: string;
-  lang?: LanguageCode;              // optional: only applies to this target
-  rules: GuidelineRule[];
-  freeText?: string;                // long-form style guide, injected as-is (token-capped)
+interface GuidelineSet {
+  // rules the translation MUST respect, verified after finalize
+  id: string
+  name: string
+  scope: GlossaryScope['level']
+  scopeId?: string
+  lang?: LanguageCode // optional: only applies to this target
+  rules: GuidelineRule[]
+  freeText?: string // long-form style guide, injected as-is (token-capped)
 }
-interface GuidelineRule { id: string; text: string; kind: 'must' | 'must-not' | 'prefer'; checkable: boolean; examples?: { good?: string; bad?: string }; }
-interface GuidelineViolation { ruleId: string; severity: 'minor' | 'major'; targetSpan?: string; explanation: string; fix?: string; }
-
-interface Brief {               // TransAgents "preparation stage"
-  detectedLang: LanguageCode;
-  domain: Domain;
-  difficulty: Difficulty;
-  summary: string;
-  tone: string;
-  audience: string;
-  keyTerms: { term: string; note: string }[];
-  risks: string[];              // idioms, ambiguity, named entities, numbers/units, placeholders
+interface GuidelineRule {
+  id: string
+  text: string
+  kind: 'must' | 'must-not' | 'prefer'
+  checkable: boolean
+  examples?: { good?: string; bad?: string }
+}
+interface GuidelineViolation {
+  ruleId: string
+  severity: 'minor' | 'major'
+  targetSpan?: string
+  explanation: string
+  fix?: string
 }
 
-interface Chunk { index: number; text: string; tokenEstimate: number; }
+interface Brief {
+  // TransAgents "preparation stage"
+  detectedLang: LanguageCode
+  domain: Domain
+  difficulty: Difficulty
+  summary: string
+  tone: string
+  audience: string
+  keyTerms: { term: string; note: string }[]
+  risks: string[] // idioms, ambiguity, named entities, numbers/units, placeholders
+}
 
-interface Candidate { chunkIndex: number; role: 'translatorA' | 'translatorB' | 'translatorC'; model: string; text: string; usage: Usage; }
+interface Chunk {
+  index: number
+  text: string
+  tokenEstimate: number
+}
 
-interface Disagreement { chunkIndex: number; sourceSpan: string; variants: Record<string, string>; severity: 'low' | 'medium' | 'high'; }
+interface Candidate {
+  chunkIndex: number
+  role: 'translatorA' | 'translatorB' | 'translatorC'
+  model: string
+  text: string
+  usage: Usage
+}
 
-interface Review { chunkIndex: number; model: string; issues: Issue[]; suggestions: string[]; }
-interface Issue { category: 'accuracy' | 'omission' | 'addition' | 'terminology' | 'grammar' | 'fluency' | 'style' | 'consistency' | 'formatting'; severity: 'minor' | 'major' | 'critical'; sourceSpan?: string; targetSpan?: string; explanation: string; fix?: string; }
+interface Disagreement {
+  chunkIndex: number
+  sourceSpan: string
+  variants: Record<string, string>
+  severity: 'low' | 'medium' | 'high'
+}
 
-interface Judgment { chunkIndex: number; winner: Candidate['role'] | 'merge'; rationale: string; mergedText?: string; }
+interface Review {
+  chunkIndex: number
+  model: string
+  issues: Issue[]
+  suggestions: string[]
+}
+interface Issue {
+  category:
+    | 'accuracy'
+    | 'omission'
+    | 'addition'
+    | 'terminology'
+    | 'grammar'
+    | 'fluency'
+    | 'style'
+    | 'consistency'
+    | 'formatting'
+  severity: 'minor' | 'major' | 'critical'
+  sourceSpan?: string
+  targetSpan?: string
+  explanation: string
+  fix?: string
+}
+
+interface Judgment {
+  chunkIndex: number
+  winner: Candidate['role'] | 'merge'
+  rationale: string
+  mergedText?: string
+}
 
 interface QualityScore {
-  fidelity: number; terminology: number; grammar: number; naturalness: number; register: number; consistency: number; // 0–100
-  overall: number; confidence: number; // confidence = agreement between models + scorer certainty
-  notes: string[];
+  fidelity: number
+  terminology: number
+  grammar: number
+  naturalness: number
+  register: number
+  consistency: number // 0–100
+  overall: number
+  confidence: number // confidence = agreement between models + scorer certainty
+  notes: string[]
 }
 
 interface TargetResult {
-  lang: LanguageCode;
-  brief: Brief;
-  chunks: Chunk[];
-  candidates: Candidate[];
-  disagreements: Disagreement[];
-  reviews: Review[];
-  terminologyReport: TermViolation[];
-  guidelineReport: GuidelineViolation[];
-  judgments: Judgment[];
-  finalText: string;
-  backTranslation?: { text: string; deltas: { source: string; back: string; note: string }[] };
-  score: QualityScore;
-  cost: { usd: number; tokensIn: number; tokensOut: number; calls: number };
-  trace: TraceEvent[];          // every prompt, model, latency, usage, raw output
+  lang: LanguageCode
+  brief: Brief
+  chunks: Chunk[]
+  candidates: Candidate[]
+  disagreements: Disagreement[]
+  reviews: Review[]
+  terminologyReport: TermViolation[]
+  guidelineReport: GuidelineViolation[]
+  judgments: Judgment[]
+  finalText: string
+  backTranslation?: { text: string; deltas: { source: string; back: string; note: string }[] }
+  score: QualityScore
+  cost: { usd: number; tokensIn: number; tokensOut: number; calls: number }
+  trace: TraceEvent[] // every prompt, model, latency, usage, raw output
 }
 ```
 
 Glossary and memory:
 
 ```ts
-type GlossaryScope = { level: 'global' | 'language' | 'client' | 'project' | 'document'; lang?: LanguageCode; parentId?: string; name: string };
-interface GlossaryEntry { id: string; scopeId: string; source: string; target: string; lang: LanguageCode; kind: 'preferred' | 'forbidden' | 'doNotTranslate'; caseSensitive: boolean; note?: string; }
-interface TmEntry { id: string; sourceLang: LanguageCode; targetLang: LanguageCode; source: string; target: string; domain: Domain; origin: 'human-correction' | 'accepted-output'; createdAt: number; hash: string; }
-interface EvalRecord { jobId: string; lang: LanguageCode; domain: Domain; difficulty: Difficulty; models: Record<string, string>; score: QualityScore; issueCounts: Record<string, number>; cost: number; humanEdited: boolean; editDistance?: number; }
+type GlossaryScope = {
+  level: 'global' | 'language' | 'client' | 'project' | 'document'
+  lang?: LanguageCode
+  parentId?: string
+  name: string
+}
+interface GlossaryEntry {
+  id: string
+  scopeId: string
+  source: string
+  target: string
+  lang: LanguageCode
+  kind: 'preferred' | 'forbidden' | 'doNotTranslate'
+  caseSensitive: boolean
+  note?: string
+}
+interface TmEntry {
+  id: string
+  sourceLang: LanguageCode
+  targetLang: LanguageCode
+  source: string
+  target: string
+  domain: Domain
+  origin: 'human-correction' | 'accepted-output'
+  createdAt: number
+  hash: string
+}
+interface EvalRecord {
+  jobId: string
+  lang: LanguageCode
+  domain: Domain
+  difficulty: Difficulty
+  models: Record<string, string>
+  score: QualityScore
+  issueCounts: Record<string, number>
+  cost: number
+  humanEdited: boolean
+  editDistance?: number
+}
 ```
 
 Resolution order for glossary: document → project → client → language → global (most specific wins; forbidden always wins over preferred at any level).
@@ -304,12 +410,12 @@ deployment → déploiement (preferred)
 
 Difficulty → plan (from `Architecture cœur.md`):
 
-| Difficulty | Translators | Review | Term check | Judge | Score | Back-translate |
-|---|---|---|---|---|---|---|
-| simple | 1 | – | rule-based only | – | cheap | – |
-| normal | 2 | 1 | LLM | – | yes | – |
-| hard | 3 | 1 | LLM | yes | yes | – |
-| critical | 3 | 2 | LLM | yes | yes | yes |
+| Difficulty | Translators | Review | Term check      | Judge | Score | Back-translate |
+| ---------- | ----------- | ------ | --------------- | ----- | ----- | -------------- |
+| simple     | 1           | –      | rule-based only | –     | cheap | –              |
+| normal     | 2           | 1      | LLM             | –     | yes   | –              |
+| hard       | 3           | 1      | LLM             | yes   | yes   | –              |
+| critical   | 3           | 2      | LLM             | yes   | yes   | yes            |
 
 Translator prompt = translation-agent's initial prompt + TransAgents' brief (summary, tone, audience) + glossary block + region hint ("Spanish as spoken in Mexico").
 
