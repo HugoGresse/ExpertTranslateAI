@@ -1,0 +1,151 @@
+export type LanguageCode = string
+
+export const AUTO_LANG = 'auto'
+
+export type Difficulty = 'simple' | 'normal' | 'hard' | 'critical'
+
+export type Domain = 'general' | 'legal' | 'technical' | 'marketing' | 'medical' | 'literary' | 'ui'
+
+export interface Target {
+  lang: LanguageCode
+  region?: string
+}
+
+export interface JobOptions {
+  tone?: string
+  audience?: string
+  formality?: 'formal' | 'informal' | 'auto'
+  preserveFormatting: boolean
+  maxTokensPerChunk: number
+}
+
+export type JobStatus = 'queued' | 'running' | 'done' | 'failed' | 'cancelled'
+
+export interface RoleModels {
+  translatorA: string
+}
+
+export interface TranslationJob {
+  id: string
+  createdAt: number
+  sourceText: string
+  sourceLang: LanguageCode
+  targets: Target[]
+  domain: Domain | 'auto'
+  difficulty: Difficulty | 'auto'
+  models: RoleModels
+  options: JobOptions
+  status: JobStatus
+}
+
+export interface Usage {
+  promptTokens: number
+  completionTokens: number
+  costUsd: number | null
+}
+
+export interface Chunk {
+  index: number
+  text: string
+  tokenEstimate: number
+}
+
+export type TranslatorRole = 'translatorA' | 'translatorB' | 'translatorC'
+
+export interface Candidate {
+  chunkIndex: number
+  role: TranslatorRole
+  model: string
+  text: string
+  usage: Usage
+}
+
+export interface CostSummary {
+  usd: number
+  tokensIn: number
+  tokensOut: number
+  calls: number
+}
+
+export interface TraceEvent {
+  at: number
+  lang: LanguageCode
+  stage: string
+  role: string
+  model: string
+  chunkIndex: number | null
+  prompt: { system: string; user: string }
+  output: string
+  usage: Usage
+  latencyMs: number
+}
+
+export interface TargetResult {
+  jobId: string
+  lang: LanguageCode
+  chunks: Chunk[]
+  candidates: Candidate[]
+  finalText: string
+  cost: CostSummary
+  trace: TraceEvent[]
+  status: 'done' | 'failed' | 'cancelled'
+  error?: string
+}
+
+export type ProgressEvent =
+  | { type: 'job-started'; jobId: string; targets: Target[] }
+  | { type: 'target-started'; lang: LanguageCode; chunkCount: number }
+  | { type: 'stage-started'; lang: LanguageCode; stage: string; chunkIndex: number | null }
+  | { type: 'token'; lang: LanguageCode; stage: string; chunkIndex: number; delta: string }
+  | {
+      type: 'stage-done'
+      lang: LanguageCode
+      stage: string
+      chunkIndex: number | null
+      usage: Usage
+    }
+  | { type: 'target-done'; lang: LanguageCode; result: TargetResult }
+  | { type: 'target-failed'; lang: LanguageCode; error: string }
+  | { type: 'job-done'; jobId: string; cost: CostSummary }
+
+export interface ModelPricing {
+  promptUsdPerToken: number
+  completionUsdPerToken: number
+}
+
+export interface ModelInfo {
+  id: string
+  name: string
+  contextLength: number
+  pricing: ModelPricing
+  supportsStructuredOutput: boolean
+}
+
+export interface ChatMessage {
+  role: 'system' | 'user' | 'assistant'
+  content: string
+}
+
+export interface ChatRequest {
+  model: string
+  messages: ChatMessage[]
+  temperature?: number
+  maxTokens?: number
+  responseFormat?: { type: 'json_object' } | { type: 'json_schema'; jsonSchema: unknown }
+}
+
+export type ChatChunk = { type: 'delta'; text: string } | { type: 'usage'; usage: Usage }
+
+export interface KeyInfo {
+  label: string
+  limitUsd: number | null
+  usageUsd: number
+  isFreeTier: boolean
+}
+
+export interface JobEstimate {
+  sourceTokens: number
+  chunkCount: number
+  callCount: number
+  estimatedUsd: number | null
+}

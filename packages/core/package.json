@@ -1,0 +1,22 @@
+{
+  "name": "@experttranslate/core",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "eventsource-parser": "^4.1.1",
+    "gpt-tokenizer": "^4.0.0"
+  },
+  "devDependencies": {
+    "vitest": "^5.0.1"
+  }
+}
