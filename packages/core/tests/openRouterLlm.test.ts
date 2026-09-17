@@ -250,4 +250,55 @@ describe('in-stream provider error codes', () => {
       usage: { promptTokens: 0, completionTokens: 0, costUsd: null },
     })
   })
+
+  it('aborts an attempt that streams no visible text in time and retries', async () => {
+    let calls = 0
+    const fetchImpl: typeof fetch = (_url, init) => {
+      calls++
+      if (calls === 1) {
+        // Only hidden reasoning keeps arriving; content never does.
+        const stream = new ReadableStream<Uint8Array>({
+          start(controller) {
+            const enc = new TextEncoder()
+            const tick = setInterval(() => {
+              controller.enqueue(
+                enc.encode(
+                  `data: ${JSON.stringify({ choices: [{ delta: { reasoning: '…' } }] })}\n\n`,
+                ),
+              )
+            }, 5)
+            init?.signal?.addEventListener('abort', () => {
+              clearInterval(tick)
+              controller.error(new DOMException('Aborted', 'AbortError'))
+            })
+          },
+        })
+        return Promise.resolve(new Response(stream, { status: 200 }))
+      }
+      return Promise.resolve(
+        new Response(
+          sse([
+            JSON.stringify({ choices: [{ delta: { content: 'Bonjour' } }] }),
+            JSON.stringify({
+              choices: [{ delta: {} }],
+              usage: { prompt_tokens: 1, completion_tokens: 1 },
+            }),
+            '[DONE]',
+          ]),
+          { status: 200 },
+        ),
+      )
+    }
+    const llm = createOpenRouterLlm({
+      apiKey: 'k',
+      fetch: fetchImpl,
+      firstTokenTimeoutMs: 40,
+      retry: { maxAttempts: 2, baseDelayMs: 1, maxDelayMs: 2 },
+    })
+    const chunks = []
+    for await (const c of llm.chat({ model: 'm', messages: [{ role: 'user', content: 'hi' }] }))
+      chunks.push(c)
+    expect(calls).toBe(2)
+    expect(chunks[0]).toEqual({ type: 'delta', text: 'Bonjour' })
+  })
 })

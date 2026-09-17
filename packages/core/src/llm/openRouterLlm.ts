@@ -29,7 +29,7 @@ import {
   parseRetryAfter,
   type RetryOptions,
 } from './retry.ts'
-import { readSseData, StreamIdleTimeoutError } from './sse.ts'
+import { readSseData, StreamIdleTimeoutError, StreamStallError } from './sse.ts'
 
 export const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1'
 
@@ -43,6 +43,8 @@ export interface OpenRouterLlmOptions {
   retry?: RetryOptions
   logger?: LoggerPort
   idleTimeoutMs?: number
+  /** Abort and retry an attempt that has streamed no visible text after this long (default 3 min). */
+  firstTokenTimeoutMs?: number
 }
 
 interface RawUsage {
@@ -113,6 +115,7 @@ export function createOpenRouterLlm(options: OpenRouterLlmOptions): LlmPort {
   const logger = options.logger ?? noopLogger
   const limiter: Limiter = createLimiter(options.concurrency ?? 4)
   const idleTimeoutMs = options.idleTimeoutMs ?? 90_000
+  const firstTokenTimeoutMs = options.firstTokenTimeoutMs ?? 180_000
 
   const headers = (): Record<string, string> => {
     const h: Record<string, string> = {
@@ -146,16 +149,32 @@ export function createOpenRouterLlm(options: OpenRouterLlmOptions): LlmPort {
         let usage: Usage | null = null
         for (let attempt = 0; attempt < retry.maxAttempts; attempt++) {
           let yielded = false
+          let stalled = false
           usage = null
+          // One controller per attempt: the caller's signal and the stall timer both abort it.
+          const attemptController = new AbortController()
+          const onAbort = (): void => attemptController.abort()
+          signal?.addEventListener('abort', onAbort, { once: true })
+          if (signal?.aborted) onAbort()
+          const stallTimer = setTimeout(() => {
+            if (!yielded) {
+              stalled = true
+              attemptController.abort()
+            }
+          }, firstTokenTimeoutMs)
           try {
             if (attempt > 0) logger.warn('openrouter.chat.retry', { model: req.model, attempt })
             const res = await request('/chat/completions', {
               method: 'POST',
               body: JSON.stringify(buildBody(req)),
-              ...(signal ? { signal } : {}),
+              signal: attemptController.signal,
             })
             if (!res.body) throw new Error('OpenRouter response has no body')
-            for await (const data of readSseData(res.body, signal, idleTimeoutMs)) {
+            for await (const data of readSseData(
+              res.body,
+              attemptController.signal,
+              idleTimeoutMs,
+            )) {
               let parsed: RawStreamChunk
               try {
                 parsed = JSON.parse(data) as RawStreamChunk
@@ -178,8 +197,17 @@ export function createOpenRouterLlm(options: OpenRouterLlmOptions): LlmPort {
               if (parsed.usage) usage = toUsage(parsed.usage)
             }
             break
-          } catch (error) {
+          } catch (caught) {
+            const error = stalled ? new StreamStallError(firstTokenTimeoutMs) : caught
             const canRetry = !yielded && isRetryable(error) && attempt < retry.maxAttempts - 1
+            if (error instanceof StreamStallError) {
+              logger.warn('openrouter.chat.stalled', {
+                model: req.model,
+                attempt,
+                afterMs: firstTokenTimeoutMs,
+                canRetry,
+              })
+            }
             if (error instanceof StreamIdleTimeoutError) {
               logger.warn('openrouter.chat.idleTimeout', {
                 model: req.model,
@@ -192,6 +220,9 @@ export function createOpenRouterLlm(options: OpenRouterLlmOptions): LlmPort {
             const retryAfter = error instanceof LlmHttpError ? error.retryAfterMs : null
             const status = error instanceof LlmHttpError ? error.status : undefined
             await sleep(backoffDelay(attempt, retry, retryAfter, status), signal)
+          } finally {
+            clearTimeout(stallTimer)
+            signal?.removeEventListener('abort', onAbort)
           }
         }
         const finalUsage = usage ?? toUsage(null)

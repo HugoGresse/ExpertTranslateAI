@@ -592,6 +592,11 @@ export const TranslateWorkspace: FC = () => {
           actions={
             <div className="flex items-center gap-3">
               <RunStatus run={run} compact />
+              {busy ? (
+                <Button variant="danger" size="sm" onClick={cancel}>
+                  Cancel
+                </Button>
+              ) : null}
               {!busy && editing ? (
                 <Button variant="ghost" size="sm" onClick={() => setEditing(false)}>
                   Focus

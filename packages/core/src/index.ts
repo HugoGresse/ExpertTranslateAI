@@ -42,7 +42,7 @@ export {
 } from './llm/openRouterLlm.ts'
 export { emptyCost, findPricing, sumCosts, usageCost } from './llm/pricing.ts'
 export { LlmHttpError, LlmStreamError } from './llm/retry.ts'
-export { readSseData, StreamIdleTimeoutError } from './llm/sse.ts'
+export { readSseData, StreamIdleTimeoutError, StreamStallError } from './llm/sse.ts'
 export { LOG_LEVELS, type LogLevel, levelEnabled, parseLogLevel } from './logging.ts'
 export {
   type ModelPreset,

@@ -1,5 +1,15 @@
 import { createParser, type EventSourceMessage } from 'eventsource-parser'
 
+/** No visible output within the allowed time; reasoning models can 'think' for minutes while streaming nothing. */
+export class StreamStallError extends Error {
+  readonly afterMs: number
+  constructor(afterMs: number) {
+    super(`The model produced no output for ${Math.round(afterMs / 1000)}s`)
+    this.name = 'StreamStallError'
+    this.afterMs = afterMs
+  }
+}
+
 export class StreamIdleTimeoutError extends Error {
   readonly idleMs: number
   constructor(idleMs: number) {
