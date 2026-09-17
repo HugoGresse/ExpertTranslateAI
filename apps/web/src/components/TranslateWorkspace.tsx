@@ -587,7 +587,6 @@ export const TranslateWorkspace: FC = () => {
 
       {run.status !== 'idle' ? (
         <Card
-          title="Pipeline"
           className={focused ? 'min-h-[calc(100vh-9rem)]' : ''}
           actions={
             <div className="flex items-center gap-3">
