@@ -21,6 +21,8 @@ const catalog = [
   m('google/gemini-2.5-flash-lite', 0.4),
   m('deepseek/deepseek-v4-flash', 0.3),
   m('meta-llama/llama-3-8b:free', 0),
+  m('anthropic/claude-opus-4.6:batch', 12),
+  m('google/gemini-2.5-flash:online', 2.5),
   m('some/unknown-model', 0.1),
 ]
 
@@ -34,6 +36,7 @@ describe('recommendModels', () => {
     expect(models.scorer).toBe('deepseek/deepseek-v4-flash')
     expect(reasons.translatorA).toContain('quality 92')
     expect(Object.values(models)).not.toContain('meta-llama/llama-3-8b:free')
+    expect(Object.values(models).some((id) => id.includes(':'))).toBe(false)
   })
 
   it('respects the preset ceilings', () => {

@@ -35,7 +35,8 @@ const FAMILIES: Family[] = [
   { pattern: /^mistralai\/mistral-small/, family: 'mistral', quality: 66 },
 ]
 
-const EXCLUDE = /:free$|preview|exp-|-beta|instruct-|vision|embed|whisper|tts|image|audio/i
+/** `:batch`, `:free`, `:online`, `:nitro`, `:thinking`… are routing variants, not plain chat models. */
+const EXCLUDE = /:[a-z-]+$|preview|exp-|-beta|instruct-|vision|embed|whisper|tts|image|audio/i
 
 interface Rated {
   model: ModelInfo
