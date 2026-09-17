@@ -125,63 +125,67 @@ const FinalText: FC<{ result: TargetResult }> = ({ result }) => {
   }
   const dir = textDirection(result.lang)
   return (
-    <div>
-      <textarea
-        className="min-h-64 w-full rounded-md border border-neutral-300 p-2 text-sm"
-        value={text}
-        dir={dir}
-        lang={result.lang}
-        onChange={(e) => setText(e.target.value)}
-      />
-      <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-neutral-600">
-        <Button onClick={() => void navigator.clipboard.writeText(text)}>Copy</Button>
-        <Button
-          onClick={() =>
-            downloadText(`translation-${fileSafeTargetKey(result.targetKey)}.txt`, text)
-          }
-        >
-          Download
-        </Button>
-        <Button
-          disabled={text === result.finalText || !canLearn}
-          title={
-            canLearn
-              ? undefined
-              : 'Set a source language (or run with a brief) to learn corrections'
-          }
-          onClick={() => void saveCorrection()}
-        >
-          Save as correction
-        </Button>
-        {saved ? <span>{saved}</span> : null}
-        <span>
-          {result.chunks.length} chunk{result.chunks.length > 1 ? 's' : ''} · {result.cost.tokensIn}{' '}
-          in / {result.cost.tokensOut} out · {formatUsd(result.cost.usd)}
-        </span>
-      </div>
-      <p className="mt-2 text-xs text-neutral-500">
-        Pipeline: {result.plan.difficulty} · {result.plan.translators.length} translator
-        {result.plan.translators.length > 1 ? 's' : ''}
-        {result.reviews.length > 0 ? ' · reviewed' : ''}
-        {result.judgments.length > 0 ? ' · judged' : ''}
-        {result.escalations.length > 0
-          ? ` · escalated ${result.escalations[0]?.from} → ${result.escalations[0]?.to} (${result.escalations[0]?.reason})`
-          : ''}
-      </p>
-      <GlossarySuggestionsCard key={result.targetKey} result={result} />
-      {result.score ? <ScoreCard score={result.score} /> : null}
-      <GuidelineReport violations={result.guidelineReport} />
-      <TerminologyReport violations={result.terminologyReport} hits={result.memoryHits} />
-      {result.backTranslation ? (
-        <BackTranslationCard
-          backTranslation={result.backTranslation}
-          sourceText={result.sourceText}
+    <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(320px,420px)]">
+      <div className="flex min-h-0 flex-col">
+        <textarea
+          className="w-full flex-1 rounded-[10px] border border-line p-3 text-[15px] leading-relaxed [min-height:var(--result-h)]"
+          value={text}
+          dir={dir}
+          lang={result.lang}
+          onChange={(e) => setText(e.target.value)}
         />
-      ) : null}
-      <DisagreementsCard disagreements={result.disagreements} />
-      {result.reviews.length > 0 ? <ReviewCard reviews={result.reviews} /> : null}
-      {result.candidates.length > 1 ? <CandidatesCard result={result} /> : null}
-      <TraceDrawer trace={result.trace} />
+        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-neutral-600">
+          <Button onClick={() => void navigator.clipboard.writeText(text)}>Copy</Button>
+          <Button
+            onClick={() =>
+              downloadText(`translation-${fileSafeTargetKey(result.targetKey)}.txt`, text)
+            }
+          >
+            Download
+          </Button>
+          <Button
+            disabled={text === result.finalText || !canLearn}
+            title={
+              canLearn
+                ? undefined
+                : 'Set a source language (or run with a brief) to learn corrections'
+            }
+            onClick={() => void saveCorrection()}
+          >
+            Save as correction
+          </Button>
+          {saved ? <span>{saved}</span> : null}
+          <span>
+            {result.chunks.length} chunk{result.chunks.length > 1 ? 's' : ''} ·{' '}
+            {result.cost.tokensIn} in / {result.cost.tokensOut} out · {formatUsd(result.cost.usd)}
+          </span>
+        </div>
+        <p className="mt-2 text-xs text-neutral-500">
+          Pipeline: {result.plan.difficulty} · {result.plan.translators.length} translator
+          {result.plan.translators.length > 1 ? 's' : ''}
+          {result.reviews.length > 0 ? ' · reviewed' : ''}
+          {result.judgments.length > 0 ? ' · judged' : ''}
+          {result.escalations.length > 0
+            ? ` · escalated ${result.escalations[0]?.from} → ${result.escalations[0]?.to} (${result.escalations[0]?.reason})`
+            : ''}
+        </p>
+      </div>
+      <div className="min-h-0 overflow-y-auto pr-1 [max-height:var(--result-h)]">
+        <GlossarySuggestionsCard key={result.targetKey} result={result} />
+        {result.score ? <ScoreCard score={result.score} /> : null}
+        <GuidelineReport violations={result.guidelineReport} />
+        <TerminologyReport violations={result.terminologyReport} hits={result.memoryHits} />
+        {result.backTranslation ? (
+          <BackTranslationCard
+            backTranslation={result.backTranslation}
+            sourceText={result.sourceText}
+          />
+        ) : null}
+        <DisagreementsCard disagreements={result.disagreements} />
+        {result.reviews.length > 0 ? <ReviewCard reviews={result.reviews} /> : null}
+        {result.candidates.length > 1 ? <CandidatesCard result={result} /> : null}
+        <TraceDrawer trace={result.trace} />
+      </div>
     </div>
   )
 }
@@ -200,7 +204,7 @@ const StreamPreview: FC<{ targetKey: string; progress: TargetProgress }> = ({
     <div>
       <p className="mb-1 text-xs text-neutral-500">{progress.activity}</p>
       <div
-        className="min-h-32 whitespace-pre-wrap rounded-md border border-neutral-200 bg-neutral-50 p-2 font-mono text-sm"
+        className="overflow-y-auto whitespace-pre-wrap rounded-[10px] border border-line bg-neutral-50 p-3 text-[15px] leading-relaxed [max-height:var(--result-h)] [min-height:12rem]"
         dir={textDirection(progress.lang)}
         lang={progress.lang}
       >

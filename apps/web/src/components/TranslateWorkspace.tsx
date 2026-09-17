@@ -147,6 +147,7 @@ export const TranslateWorkspace: FC = () => {
   const [estimate, setEstimate] = useState<JobEstimate | null>(null)
   const [styleOpen, setStyleOpen] = useState(false)
   const [addContext, setAddContext] = useState(false)
+  const [editing, setEditing] = useState(false)
   const selection = useMemo<Selection>(
     () => ({
       contextSourceIds: selectedContextIds.filter((id) =>
@@ -208,6 +209,7 @@ export const TranslateWorkspace: FC = () => {
     const job = buildJob(source, settings, targets, selection)
     controller.current = new AbortController()
     beginRun(job.difficulty)
+    setEditing(false)
     logger.info('run.start', {
       jobId: job.id,
       targets: job.targets.length,
@@ -246,6 +248,17 @@ export const TranslateWorkspace: FC = () => {
     settings.backTranslate === 'true' ? 'back-translate' : null,
   ].filter(Boolean)
   const wordCount = source.trim() ? source.trim().split(/\s+/).length : 0
+  const focused = run.status !== 'idle' && !editing
+  const materialsCount =
+    selection.contextSourceIds.length +
+    selection.glossaryScopeIds.length +
+    selection.guidelineSetIds.length +
+    (useMemory ? 1 : 0)
+  const firstLine =
+    source
+      .trim()
+      .split('\n')[0]
+      ?.replace(/^#+\s*/, '') ?? ''
 
   const translateButton = (
     <Button
@@ -264,9 +277,44 @@ export const TranslateWorkspace: FC = () => {
   )
 
   return (
-    <div className="flex flex-col gap-5">
-      <FirstRunCard />
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_400px]">
+    <div
+      className="flex flex-col gap-5"
+      style={{ '--result-h': 'calc(100vh - 25rem)' } as React.CSSProperties}
+    >
+      {focused ? (
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-2xl border border-line bg-canvas px-5 py-3 text-sm">
+          <span className="max-w-[40ch] truncate font-semibold text-fg" title={firstLine}>
+            {firstLine || 'Untitled text'}
+          </span>
+          <span className="text-body">
+            {wordCount} words → {targets.map((t) => languageName(t.lang)).join(', ')}
+          </span>
+          <span className="text-muted">
+            {QUALITY.find((q) => q.value === run.difficulty)?.label ?? run.difficulty} ·{' '}
+            {materialsCount} material{materialsCount === 1 ? '' : 's'}
+          </span>
+          <span className="ml-auto flex gap-2">
+            <Button size="sm" onClick={() => setEditing(true)}>
+              {busy ? 'Show source' : 'Edit and rerun'}
+            </Button>
+            {!busy ? (
+              <Button
+                size="sm"
+                variant="weak"
+                onClick={() => {
+                  $run.set(idleRun)
+                  $sourceDraft.set('')
+                  setEditing(false)
+                }}
+              >
+                New translation
+              </Button>
+            ) : null}
+          </span>
+        </div>
+      ) : null}
+      {!focused ? <FirstRunCard /> : null}
+      <div className={`grid gap-5 xl:grid-cols-[minmax(0,1fr)_400px] ${focused ? 'hidden' : ''}`}>
         <Card
           title="Source"
           actions={
@@ -540,12 +588,13 @@ export const TranslateWorkspace: FC = () => {
       {run.status !== 'idle' ? (
         <Card
           title="Pipeline"
+          className={focused ? 'min-h-[calc(100vh-9rem)]' : ''}
           actions={
             <div className="flex items-center gap-3">
               <RunStatus run={run} compact />
-              {!busy ? (
-                <Button variant="ghost" size="sm" onClick={() => $run.set(idleRun)}>
-                  Clear
+              {!busy && editing ? (
+                <Button variant="ghost" size="sm" onClick={() => setEditing(false)}>
+                  Focus
                 </Button>
               ) : null}
             </div>
