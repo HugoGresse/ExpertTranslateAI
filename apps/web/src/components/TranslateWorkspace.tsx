@@ -586,31 +586,29 @@ export const TranslateWorkspace: FC = () => {
       </div>
 
       {run.status !== 'idle' ? (
-        <Card
-          className={focused ? 'min-h-[calc(100vh-9rem)]' : ''}
-          actions={
-            <div className="flex items-center gap-3">
-              <RunStatus run={run} compact />
-              {busy ? (
-                <Button variant="danger" size="sm" onClick={cancel}>
-                  Cancel
-                </Button>
-              ) : null}
-              {!busy && editing ? (
-                <Button variant="ghost" size="sm" onClick={() => setEditing(false)}>
-                  Focus
-                </Button>
-              ) : null}
-            </div>
-          }
-        >
+        <Card className={focused ? 'min-h-[calc(100vh-9rem)]' : ''}>
           {run.error ? <p className="mb-2 text-sm text-danger">{run.error}</p> : null}
           {run.status === 'cancelled' ? (
             <p className="mb-2 text-sm text-warning">Cancelled.</p>
           ) : null}
-          {run.brief ? <BriefCard brief={run.brief} /> : null}
           <ResultPanel
             targets={run.targets}
+            trailing={
+              <div className="flex items-center gap-3">
+                <RunStatus run={run} compact />
+                {busy ? (
+                  <Button variant="danger" size="sm" onClick={cancel}>
+                    Cancel
+                  </Button>
+                ) : null}
+                {!busy && editing ? (
+                  <Button variant="ghost" size="sm" onClick={() => setEditing(false)}>
+                    Focus
+                  </Button>
+                ) : null}
+              </div>
+            }
+            above={run.brief ? <BriefCard brief={run.brief} /> : null}
             board={{
               stages: run.stages,
               difficulty: run.difficulty,

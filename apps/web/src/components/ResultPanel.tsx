@@ -9,7 +9,7 @@ import {
   wordEditDistance,
 } from '@experttranslate/core'
 import { useStore } from '@nanostores/react'
-import { type FC, useEffect, useMemo, useState } from 'react'
+import { type FC, type ReactNode, useEffect, useMemo, useState } from 'react'
 import { storage } from '../adapters/dexieStorage'
 import { logger } from '../adapters/logger'
 import { languageLabel, textDirection } from '../data/languages'
@@ -30,6 +30,10 @@ import { Button, formatUsd } from './ui'
 export interface ResultPanelProps {
   targets: Record<string, TargetProgress>
   board: Omit<PipelineBoardProps, 'targetKey' | 'progress'>
+  /** Rendered on the tab row, right-aligned: status, cost, cancel. */
+  trailing?: ReactNode
+  /** Rendered between the tab row and the board (the brief). */
+  above?: ReactNode
 }
 
 const TraceDrawer: FC<{ trace: TraceEvent[] }> = ({ trace }) => {
@@ -219,7 +223,7 @@ const StreamPreview: FC<{ targetKey: string; progress: TargetProgress }> = ({
   )
 }
 
-export const ResultPanel: FC<ResultPanelProps> = ({ targets, board }) => {
+export const ResultPanel: FC<ResultPanelProps> = ({ targets, board, trailing, above }) => {
   const langs = Object.keys(targets)
   const [active, setActive] = useState(langs[0] ?? '')
   useEffect(() => {
@@ -230,31 +234,35 @@ export const ResultPanel: FC<ResultPanelProps> = ({ targets, board }) => {
 
   return (
     <div>
-      <div role="tablist" className="flex flex-wrap gap-1 border-b border-neutral-200">
-        {langs.map((lang) => {
-          const p = targets[lang]
-          const badge =
-            p?.status === 'done'
-              ? '✓'
-              : p?.status === 'failed'
-                ? '!'
-                : p?.status === 'running'
-                  ? '…'
-                  : ''
-          return (
-            <button
-              key={lang}
-              role="tab"
-              type="button"
-              aria-selected={lang === active}
-              className={`px-3 py-2 text-sm ${lang === active ? 'border-b-2 border-primary font-semibold text-fg' : 'text-muted hover:text-body'}`}
-              onClick={() => setActive(lang)}
-            >
-              {languageLabel(p?.lang ?? lang, p?.region)} {badge}
-            </button>
-          )
-        })}
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line">
+        <div role="tablist" className="flex flex-wrap gap-1">
+          {langs.map((lang) => {
+            const p = targets[lang]
+            const badge =
+              p?.status === 'done'
+                ? '✓'
+                : p?.status === 'failed'
+                  ? '!'
+                  : p?.status === 'running'
+                    ? '…'
+                    : ''
+            return (
+              <button
+                key={lang}
+                role="tab"
+                type="button"
+                aria-selected={lang === active}
+                className={`px-3 py-2 text-sm ${lang === active ? 'border-b-2 border-primary font-semibold text-fg' : 'text-muted hover:text-body'}`}
+                onClick={() => setActive(lang)}
+              >
+                {languageLabel(p?.lang ?? lang, p?.region)} {badge}
+              </button>
+            )
+          })}
+        </div>
+        {trailing ? <div className="pb-2">{trailing}</div> : null}
       </div>
+      {above ? <div className="pt-3">{above}</div> : null}
       <div className="flex flex-col gap-4 pt-4">
         <PipelineBoard targetKey={active} progress={current} {...board} />
         {current.status === 'failed' ? (
