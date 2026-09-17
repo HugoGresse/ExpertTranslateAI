@@ -16,6 +16,7 @@ import { languageLabel, textDirection } from '../data/languages'
 import { downloadText } from '../lib/download'
 import { $previews, previewChunks, type TargetProgress } from '../stores/run'
 import { BackTranslationCard } from './BackTranslationCard'
+import { GlossarySuggestionsCard } from './GlossarySuggestionsCard'
 import {
   CandidatesCard,
   DisagreementsCard,
@@ -165,6 +166,7 @@ const FinalText: FC<{ result: TargetResult }> = ({ result }) => {
           ? ` · escalated ${result.escalations[0]?.from} → ${result.escalations[0]?.to} (${result.escalations[0]?.reason})`
           : ''}
       </p>
+      <GlossarySuggestionsCard key={result.targetKey} result={result} />
       {result.score ? <ScoreCard score={result.score} /> : null}
       <GuidelineReport violations={result.guidelineReport} />
       <TerminologyReport violations={result.terminologyReport} hits={result.memoryHits} />

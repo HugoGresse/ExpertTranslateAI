@@ -11,4 +11,5 @@ export const STAGE_LABELS: Record<StageName, string> = {
   finalize: 'finalizing',
   score: 'scoring',
   backtranslate: 'back-translating',
+  glossary: 'suggesting glossary terms',
 }

@@ -15,6 +15,8 @@ export interface TargetProgress {
   region?: string
   status: 'pending' | 'running' | 'done' | 'failed'
   chunkCount: number
+  /** Model calls finished so far for this target. */
+  callsDone: number
   placeholders: Record<string, string>
   activity: string
   result?: TargetResult
@@ -26,6 +28,8 @@ export interface RunState {
   jobId: string | null
   brief: Brief | null
   targets: Record<string, TargetProgress>
+  /** Running totals from every finished call, updated while the job is live. */
+  live: CostSummary
   cost: CostSummary | null
   error: string | null
 }
@@ -35,6 +39,7 @@ export const idleRun: RunState = {
   jobId: null,
   brief: null,
   targets: {},
+  live: { usd: 0, calls: 0, tokensIn: 0, tokensOut: 0 },
   cost: null,
   error: null,
 }
@@ -59,18 +64,23 @@ const emptyProgress = (lang: string, region?: string): TargetProgress => ({
   ...(region ? { region } : {}),
   status: 'pending',
   chunkCount: 0,
+  callsDone: 0,
   placeholders: {},
   activity: 'waiting',
 })
 
-const patchTarget = (key: string, patch: Partial<TargetProgress>): void => {
+const patchTarget = (
+  key: string,
+  patch: Partial<TargetProgress> | ((p: TargetProgress) => Partial<TargetProgress>),
+): void => {
   const targets = $run.get().targets
   const current = targets[key]
   if (!current) {
     logger.warn('run.unknownTarget', { key, known: Object.keys(targets) })
     return
   }
-  $run.setKey('targets', { ...targets, [key]: { ...current, ...patch } })
+  const delta = typeof patch === 'function' ? patch(current) : patch
+  $run.setKey('targets', { ...targets, [key]: { ...current, ...delta } })
 }
 
 type PreviewStage = keyof TargetPreview
@@ -96,6 +106,7 @@ export function applyProgress(event: ProgressEvent): void {
         status: 'running',
         jobId: event.jobId,
         brief: null,
+        live: { usd: 0, calls: 0, tokensIn: 0, tokensOut: 0 },
         cost: null,
         error: null,
         targets: Object.fromEntries(
@@ -137,8 +148,18 @@ export function applyProgress(event: ProgressEvent): void {
       writePreview(event.targetKey, stage, event.chunkIndex, existing + event.delta)
       return
     }
-    case 'stage-done':
+    case 'stage-done': {
+      const live = $run.get().live
+      $run.setKey('live', {
+        usd: live.usd + (event.usage.costUsd ?? 0),
+        calls: live.calls + 1,
+        tokensIn: live.tokensIn + event.usage.promptTokens,
+        tokensOut: live.tokensOut + event.usage.completionTokens,
+      })
+      if (event.targetKey !== '*')
+        patchTarget(event.targetKey, (p) => ({ callsDone: p.callsDone + 1 }))
       return
+    }
     case 'escalated':
       patchTarget(event.targetKey, {
         activity: `escalating ${event.from} → ${event.to}${event.chunkIndex !== null ? ` (chunk ${event.chunkIndex + 1})` : ''}: ${event.reason}`,

@@ -10,6 +10,7 @@ export const PROMPT_STAGES: PromptStage[] = [
   'score',
   'backtranslate',
   'deltas',
+  'glossary',
 ]
 
 export const DEFAULT_ROLE_LINES: Record<PromptStage, string[]> = {
@@ -51,5 +52,9 @@ export const DEFAULT_ROLE_LINES: Record<PromptStage, string[]> = {
   deltas: [
     'You compare an original text with a literal back-translation of its translation.',
     'List every place where meaning was lost, added or shifted. Ignore wording differences that keep the meaning.',
+  ],
+  glossary: [
+    'You are a terminologist building a glossary from a finished translation.',
+    'Extract the term pairs a future translator must reuse so the product sounds the same every time.',
   ],
 }

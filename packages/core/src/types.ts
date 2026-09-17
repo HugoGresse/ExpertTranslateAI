@@ -30,6 +30,8 @@ export interface JobOptions {
   routing: RouterRule[]
   backTranslate: boolean
   promptOverrides: PromptOverrides
+  /** Ask the helper for glossary term pairs after each target (normal difficulty and above). */
+  suggestGlossary: boolean
 }
 
 export type DeltaKind = 'loss' | 'addition' | 'shift'
@@ -125,6 +127,14 @@ export interface GlossaryEntry {
   caseSensitive: boolean
   note?: string
   createdAt: number
+}
+
+/** A source→target pair the helper proposes for the glossary after a run. */
+export interface GlossarySuggestion {
+  source: string
+  target: string
+  kind: 'preferred' | 'doNotTranslate'
+  note?: string
 }
 
 export interface TermViolation {
@@ -305,6 +315,7 @@ export type PromptStage =
   | 'score'
   | 'backtranslate'
   | 'deltas'
+  | 'glossary'
 
 export type PromptOverrides = Partial<Record<PromptStage, string>>
 
@@ -387,6 +398,7 @@ export interface TargetResult {
   disagreements: Disagreement[]
   escalations: Escalation[]
   backTranslation: BackTranslation | null
+  glossarySuggestions: GlossarySuggestion[]
   cost: CostSummary
   trace: TraceEvent[]
   status: 'done' | 'failed' | 'cancelled'
@@ -403,6 +415,7 @@ export type StageName =
   | 'finalize'
   | 'score'
   | 'backtranslate'
+  | 'glossary'
 
 export type ProgressEvent =
   | { type: 'job-started'; jobId: string; targets: Target[] }

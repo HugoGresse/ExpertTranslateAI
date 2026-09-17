@@ -36,11 +36,14 @@ import {
   toggleId,
   usesServer,
 } from '../stores/settings'
+import { ContextQuickAdd } from './ContextQuickAdd'
 import { KeyGate } from './KeyGate'
 import { MaterialChips } from './MaterialChips'
+import { ModelAutoPick } from './ModelAutoPick'
 import { ModelPicker } from './ModelPicker'
 import { BriefCard } from './ResultDetails'
 import { ResultPanel } from './ResultPanel'
+import { RunStatus } from './RunStatus'
 import { SourceInput } from './SourceInput'
 import { TargetPicker } from './TargetPicker'
 import { Button, Card, Field, formatUsd, inputClass } from './ui'
@@ -106,6 +109,7 @@ const buildJob = (
       ),
       routing: selection.routing,
       backTranslate: s.backTranslate === 'true',
+      suggestGlossary: s.suggestGlossary === 'true',
       promptOverrides: selection.promptOverrides,
       formality: s.formality,
       ...(s.tone ? { tone: s.tone } : {}),
@@ -221,6 +225,42 @@ export const TranslateWorkspace: FC = () => {
 
   return (
     <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+      <div className="sticky top-0 z-10 -mx-4 border-b border-neutral-200 bg-white/95 px-4 py-2 backdrop-blur lg:col-span-2">
+        <div className="flex flex-wrap items-center gap-3">
+          <Button variant="primary" disabled={!canRun} onClick={() => void start()}>
+            {busy ? 'Translating…' : 'Translate'}
+          </Button>
+          {busy ? (
+            <Button variant="danger" onClick={cancel}>
+              Cancel
+            </Button>
+          ) : null}
+          {run.status !== 'idle' && !busy ? (
+            <Button variant="ghost" onClick={() => $run.set(idleRun)}>
+              Clear
+            </Button>
+          ) : null}
+          {estimate && run.status === 'idle' ? (
+            <span className="text-xs text-neutral-600">
+              ~{estimate.sourceTokens} tokens · {estimate.chunkCount} chunk
+              {estimate.chunkCount > 1 ? 's' : ''} · {estimate.callCount} calls
+              {estimate.estimatedUsd !== null ? (
+                <>
+                  {' · est. '}
+                  <strong>{formatUsd(estimate.estimatedUsd)}</strong>
+                </>
+              ) : (
+                ''
+              )}
+            </span>
+          ) : null}
+          {run.status !== 'idle' ? (
+            <div className="min-w-0 flex-1">
+              <RunStatus run={run} />
+            </div>
+          ) : null}
+        </div>
+      </div>
       <div className="flex flex-col gap-4">
         {!apiKey && !remote ? <KeyGate /> : null}
         <Card title="Source">
@@ -330,12 +370,18 @@ export const TranslateWorkspace: FC = () => {
         <Card title="Context and guidelines">
           <MaterialChips
             label="Context"
-            emptyHint="No context sources. Add an llms.txt or Markdown file on the Context page."
+            emptyHint="No context yet. Paste notes, a URL or a file below; manage them on the Context page."
             items={contexts.items
               .filter((c) => c.enabled)
               .map((c) => ({ id: c.id, name: c.name, lang: c.lang }))}
             selected={selectedContextIds}
             onToggle={(id) => $selectedContextIds.set(toggleId(selectedContextIds, id))}
+          />
+          <ContextQuickAdd
+            onAdd={async (source) => {
+              await contexts.save(source)
+              $selectedContextIds.set([...$selectedContextIds.get(), source.id])
+            }}
           />
           <MaterialChips
             label="Glossary scopes"
@@ -373,33 +419,17 @@ export const TranslateWorkspace: FC = () => {
             loading={loading}
             onChange={(id) => $settings.setKey('translatorModel', id)}
           />
+          <ModelAutoPick models={models} />
+          <p className="mt-2 text-xs text-neutral-500">
+            Other roles (reviewer, finalizer, helper…) follow this model unless set in Settings.
+          </p>
         </Card>
-        <div className="flex flex-wrap items-center gap-3">
-          <Button variant="primary" disabled={!canRun} onClick={() => void start()}>
-            Translate
-          </Button>
-          {busy ? (
-            <Button variant="danger" onClick={cancel}>
-              Cancel
-            </Button>
-          ) : null}
-          {run.status !== 'idle' && !busy ? (
-            <Button variant="ghost" onClick={() => $run.set(idleRun)}>
-              Clear
-            </Button>
-          ) : null}
-          {estimate ? (
-            <span className="text-xs text-neutral-600">
-              ~{estimate.sourceTokens} tokens · {estimate.chunkCount} chunk
-              {estimate.chunkCount > 1 ? 's' : ''} · {estimate.callCount} calls
-              {estimate.estimatedUsd !== null ? ` · est. ${formatUsd(estimate.estimatedUsd)}` : ''}
-            </span>
-          ) : null}
-        </div>
       </div>
       <Card title="Result">
         {run.status === 'idle' ? (
-          <p className="text-sm text-neutral-500">Results appear here.</p>
+          <p className="text-sm text-neutral-500">
+            Results appear here. Progress and running cost show in the bar above while translating.
+          </p>
         ) : null}
         {run.error ? <p className="mb-2 text-sm text-red-700">{run.error}</p> : null}
         {run.status === 'cancelled' ? (
@@ -408,9 +438,9 @@ export const TranslateWorkspace: FC = () => {
         {run.brief ? <BriefCard brief={run.brief} /> : null}
         <ResultPanel targets={run.targets} />
         {run.cost ? (
-          <p className="mt-3 text-xs text-neutral-600">
+          <p className="mt-3 text-sm">
             Total: {run.cost.calls} calls · {run.cost.tokensIn} in / {run.cost.tokensOut} out ·{' '}
-            {formatUsd(run.cost.usd)}
+            <strong>{formatUsd(run.cost.usd)}</strong>
           </p>
         ) : null}
       </Card>

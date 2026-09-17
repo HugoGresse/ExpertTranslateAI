@@ -106,6 +106,16 @@ export const deltaSchema = z.object({
   ),
 })
 
+export const glossarySuggestSchema = listOr(
+  z.object({
+    source: z.string(),
+    target: textOr(''),
+    kind: z.enum(['preferred', 'doNotTranslate']).catch('preferred'),
+    note: optionalText,
+  }),
+)
+
+export type GlossarySuggestOutput = z.infer<typeof glossarySuggestSchema>
 export type DeltaOutput = z.infer<typeof deltaSchema>
 export type BriefOutput = z.infer<typeof briefSchema>
 export type ReviewOutput = z.infer<typeof reviewSchema>

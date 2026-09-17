@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { sse } from './helpers'
+import { mockChat, mockModels, sse } from './helpers'
 
 test('context from a pasted llms.txt and a guideline rule reach the prompt and the report', async ({
   page,
@@ -60,4 +60,29 @@ test('context from a pasted llms.txt and a guideline rule reach the prompt and t
   expect(systemPrompts[0]).toContain('# Hyperfluid')
   expect(systemPrompts[0]).toContain('- Start: Getting started')
   expect(systemPrompts[0]).toContain('1. MUST NOT translate Hyperfluid')
+})
+
+test('context can be pasted right in the workspace and is used immediately', async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('eta.openrouter.key', 'sk-or-e2e')
+    localStorage.setItem('eta.settings.translatorModel', 'test/model')
+    localStorage.setItem('eta.settings.difficulty', 'simple')
+    localStorage.setItem('eta.settings.autoEscalate', 'false')
+    localStorage.setItem('eta.targets', JSON.stringify([{ lang: 'fr' }]))
+  })
+  await mockModels(page)
+  const seen = await mockChat(page, () => 'Bonjour')
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Paste text' }).click()
+  await page.getByLabel('Context text').fill('# Product\nThe product is called Zephyr.')
+  await page.getByRole('button', { name: 'Add and use' }).click()
+  await expect(page.getByRole('button', { name: /Pasted context/ })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  )
+  await page.getByPlaceholder('Paste text or Markdown to translate').fill('Hello')
+  await page.getByRole('button', { name: 'Translate' }).click()
+  await expect(page.locator('textarea').last()).toHaveValue('Bonjour')
+  expect(seen[0]?.messages[0]?.content).toContain('Zephyr')
+  await expect(page.getByText(/Total: 1 calls/)).toBeVisible()
 })

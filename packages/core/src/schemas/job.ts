@@ -60,6 +60,7 @@ export const translationJobSchema = z.object({
     routing: z.array(routerRuleSchema).max(100),
     backTranslate: z.boolean(),
     promptOverrides: z.record(z.string(), z.string().max(20_000)),
+    suggestGlossary: z.boolean().default(false),
   }),
   status: z.enum(['queued', 'running', 'done', 'failed', 'cancelled']),
 })

@@ -5,7 +5,11 @@ import { logger } from '../adapters/logger'
 import { languageLabel } from '../data/languages'
 import { Button, Card, formatUsd } from './ui'
 
-const JobRow: FC<{ job: TranslationJob; onDelete: (id: string) => void }> = ({ job, onDelete }) => {
+const JobRow: FC<{ job: TranslationJob; cost: number | null; onDelete: (id: string) => void }> = ({
+  job,
+  cost,
+  onDelete,
+}) => {
   const [results, setResults] = useState<TargetResult[] | null>(null)
   const toggle = async (): Promise<void> => {
     if (results) {
@@ -24,7 +28,13 @@ const JobRow: FC<{ job: TranslationJob; onDelete: (id: string) => void }> = ({ j
             {job.models.translatorA} · {job.status}
           </span>
         </div>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
+          <span
+            className="rounded-full bg-neutral-100 px-2 py-0.5 text-sm font-semibold"
+            title="Total cost of this run"
+          >
+            {cost === null ? '—' : formatUsd(cost)}
+          </span>
           <Button onClick={() => void toggle()}>{results ? 'Hide' : 'Open'}</Button>
           <Button variant="danger" onClick={() => onDelete(job.id)}>
             Delete
@@ -55,8 +65,20 @@ const JobRow: FC<{ job: TranslationJob; onDelete: (id: string) => void }> = ({ j
 
 export const HistoryList: FC = () => {
   const [jobs, setJobs] = useState<TranslationJob[]>([])
+  const [costs, setCosts] = useState<Record<string, number>>({})
 
-  const reload = useCallback(async (): Promise<void> => setJobs(await storage.jobs.list()), [])
+  const reload = useCallback(async (): Promise<void> => {
+    const list = (await storage.jobs.list()).sort((a, b) => b.createdAt - a.createdAt)
+    setJobs(list)
+    const entries = await Promise.all(
+      list.map(async (job) => {
+        const results = await storage.results.listByJob(job.id)
+        return [job.id, results.reduce((acc, r) => acc + r.cost.usd, 0)] as const
+      }),
+    )
+    setCosts(Object.fromEntries(entries))
+  }, [])
+  const total = jobs.reduce((acc, j) => acc + (costs[j.id] ?? 0), 0)
 
   useEffect(() => {
     void reload()
@@ -71,10 +93,19 @@ export const HistoryList: FC = () => {
 
   return (
     <Card title="History">
+      <p className="mb-3 text-sm">
+        {jobs.length} run{jobs.length === 1 ? '' : 's'} · total spent{' '}
+        <strong className="text-base">{formatUsd(total)}</strong>
+      </p>
       {jobs.length === 0 ? <p className="text-sm text-neutral-500">No translations yet.</p> : null}
       <ul className="flex flex-col gap-3">
         {jobs.map((job) => (
-          <JobRow key={job.id} job={job} onDelete={(id) => void remove(id)} />
+          <JobRow
+            key={job.id}
+            job={job}
+            cost={costs[job.id] ?? null}
+            onDelete={(id) => void remove(id)}
+          />
         ))}
       </ul>
     </Card>

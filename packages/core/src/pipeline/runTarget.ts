@@ -14,6 +14,7 @@ import { type Plan, planFor } from './plan.ts'
 import { type ChunkOutcome, processChunk } from './processChunk.ts'
 import { type JobMaterials, setupTarget, type TargetSetup } from './setupTarget.ts'
 import { backTranslateTarget } from './stages/backTranslate.ts'
+import { suggestGlossary } from './stages/glossarySuggest.ts'
 import { degrade, isAbort } from './violations.ts'
 
 export type { JobMaterials } from './setupTarget.ts'
@@ -138,6 +139,24 @@ export async function runTarget(
         ).catch((error: unknown) => degrade(error, 'backtranslate', target.lang, ctx, null))
       : null
 
+  const glossarySuggestions =
+    job.options.suggestGlossary && escalated.plan.finalize
+      ? await suggestGlossary(
+          {
+            lang: target.lang,
+            targetKey: setup.key,
+            model: models.helper,
+            sourceLang: setup.sourceLang,
+            targetLabel: setup.targetLabel,
+            sourceText: job.sourceText,
+            finalText: evaluation.finalText,
+            knownTerms: setup.glossary.map((e) => e.source),
+            materials: setup.materials,
+          },
+          ctx,
+        ).catch((error: unknown) => degrade(error, 'glossary', target.lang, ctx, []))
+      : []
+
   const cost = ctx.trace.reduce<CostSummary>((acc, t) => addUsage(acc, t.usage), emptyCost())
   return {
     jobId: job.id,
@@ -162,6 +181,7 @@ export async function runTarget(
     disagreements: outcomes.flatMap((o) => o.disagreements),
     escalations: escalated.escalations,
     backTranslation,
+    glossarySuggestions,
     cost,
     trace: [...materials.trace, ...ctx.trace],
     status: 'done',

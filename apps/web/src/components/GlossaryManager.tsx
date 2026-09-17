@@ -188,6 +188,7 @@ export const GlossaryManager: FC = () => {
   const scopes = useRepo<GlossaryScope>(storage.glossaryScopes)
   const entries = useRepo<GlossaryEntry>(storage.glossaryEntries)
   const [activeScope, setActiveScope] = useState<string>('')
+  const [query, setQuery] = useState('')
   const active = scopes.items.find((s) => s.id === activeScope) ?? scopes.items[0]
   const targets = useStore($targets)
   const defaultLang = active?.lang ?? targets[0]?.lang ?? 'fr'
@@ -304,6 +305,11 @@ export const GlossaryManager: FC = () => {
       <Card title={active ? `Entries in ${active.name} (${scopeEntries.length})` : 'Entries'}>
         {active ? (
           <div className="flex flex-col gap-3">
+            <p className="text-xs text-neutral-500">
+              Tip: after every normal or hard run the workspace suggests terms from the translation;
+              one click adds them here. Preferred = must use this rendering; forbidden = never this
+              one; do not translate = keep the source term.
+            </p>
             <EntryForm
               key={`${active.id}-${defaultLang}`}
               scopeId={active.id}
@@ -322,6 +328,13 @@ export const GlossaryManager: FC = () => {
                 />
               </label>
             </div>
+            <input
+              className={inputClass}
+              placeholder="Search terms…"
+              aria-label="Search glossary"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
             <table className="w-full text-sm">
               <thead className="text-left text-xs text-neutral-500">
                 <tr>
@@ -333,30 +346,40 @@ export const GlossaryManager: FC = () => {
                 </tr>
               </thead>
               <tbody>
-                {scopeEntries.map((e) => (
-                  <tr key={e.id} className="border-t border-neutral-100">
-                    <td className="py-1 pr-2">{e.source}</td>
-                    <td className="py-1 pr-2">
-                      {e.kind === 'doNotTranslate' ? (
-                        <em className="text-neutral-500">unchanged</em>
-                      ) : (
-                        e.target
-                      )}
-                    </td>
-                    <td className="py-1 pr-2">{e.lang}</td>
-                    <td className="py-1 pr-2">{KIND_LABEL[e.kind]}</td>
-                    <td className="py-1 text-right">
-                      <Button variant="ghost" onClick={() => void entries.remove(e.id)}>
-                        ×
-                      </Button>
-                    </td>
-                  </tr>
-                ))}
+                {scopeEntries
+                  .filter((e) => {
+                    const q = query.trim().toLowerCase()
+                    return (
+                      !q || e.source.toLowerCase().includes(q) || e.target.toLowerCase().includes(q)
+                    )
+                  })
+                  .map((e) => (
+                    <tr key={e.id} className="border-t border-neutral-100">
+                      <td className="py-1 pr-2">{e.source}</td>
+                      <td className="py-1 pr-2">
+                        {e.kind === 'doNotTranslate' ? (
+                          <em className="text-neutral-500">unchanged</em>
+                        ) : (
+                          e.target
+                        )}
+                      </td>
+                      <td className="py-1 pr-2">{e.lang}</td>
+                      <td className="py-1 pr-2">{KIND_LABEL[e.kind]}</td>
+                      <td className="py-1 text-right">
+                        <Button variant="ghost" onClick={() => void entries.remove(e.id)}>
+                          ×
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
               </tbody>
             </table>
           </div>
         ) : (
-          <p className="text-sm text-neutral-500">Create a scope first.</p>
+          <p className="text-sm text-neutral-500">
+            Create a scope first (a “project” scope is a good default), or run a translation and
+            accept the suggested terms: that creates one for you.
+          </p>
         )}
       </Card>
     </div>

@@ -126,3 +126,63 @@ describe('sliceSafe', () => {
     )
   })
 })
+
+describe('glossary suggestions', () => {
+  it('runs after finalize on normal difficulty and drops known or empty terms', async () => {
+    const llm = createFakeLlm((req) => {
+      const system = req.messages[0]?.content ?? ''
+      if (system.includes('terminologist'))
+        return JSON.stringify([
+          { source: 'Workflow', target: 'flux de travail', kind: 'preferred' },
+          { source: 'workflow', target: 'dup', kind: 'preferred' },
+          { source: 'Known', target: 'connu', kind: 'preferred' },
+          { source: 'Empty', target: '', kind: 'preferred' },
+          { source: 'Zephyr', target: 'Zephyr', kind: 'doNotTranslate', note: 'brand' },
+        ])
+      if (system.includes('brief'))
+        return '{"detectedLang":"en","domain":"technical","difficulty":"normal","summary":"s","tone":"","audience":"","keyTerms":[],"risks":[]}'
+      if (system.includes('reviewing')) return '{"issues":[],"suggestions":[],"preferred":null}'
+      if (system.includes('audit')) return '{"violations":[]}'
+      if (system.includes('assessor'))
+        return '{"fidelity":90,"terminology":90,"grammar":90,"naturalness":90,"register":90,"consistency":90,"confidence":90,"notes":[]}'
+      return 'Bonjour'
+    })
+    const storage = createMemoryStorage()
+    await storage.glossaryScopes.put({ id: 'g', level: 'global', name: 'G', createdAt: 0 })
+    await storage.glossaryEntries.put({
+      id: 'e',
+      scopeId: 'g',
+      source: 'Known',
+      target: 'connu',
+      lang: 'fr',
+      kind: 'preferred',
+      caseSensitive: false,
+      createdAt: 0,
+    })
+    const engine = createEngine({ llm, storage, clock: { now: () => 1 }, logger: noopLogger })
+    const job = sampleJob({ targets: [{ lang: 'fr' }], difficulty: 'normal' })
+    job.options.suggestGlossary = true
+    job.options.glossaryScopeIds = ['g']
+    const events = await collect(engine.run(job))
+    const done = events.find((e) => e.type === 'target-done')
+    const suggestions = done?.type === 'target-done' ? done.result.glossarySuggestions : []
+    expect(suggestions).toEqual([
+      { source: 'Workflow', target: 'flux de travail', kind: 'preferred' },
+      { source: 'Zephyr', target: 'Zephyr', kind: 'doNotTranslate', note: 'brand' },
+    ])
+  })
+
+  it('is skipped on simple difficulty', async () => {
+    const llm = createFakeLlm(() => 'Bonjour')
+    const engine = createEngine({
+      llm,
+      storage: createMemoryStorage(),
+      clock: { now: () => 1 },
+      logger: noopLogger,
+    })
+    const job = sampleJob({ targets: [{ lang: 'fr' }] })
+    job.options.suggestGlossary = true
+    await collect(engine.run(job))
+    expect(llm.calls).toHaveLength(1)
+  })
+})

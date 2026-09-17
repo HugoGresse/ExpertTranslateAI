@@ -67,6 +67,7 @@ test('a configured server runs the job without a local key and history keeps the
       disagreements: [],
       escalations: [],
       backTranslation: null,
+      glossarySuggestions: [],
       cost: { usd: 0.001, calls: 1, tokensIn: 10, tokensOut: 5 },
       trace: [],
       status: 'done',

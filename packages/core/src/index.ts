@@ -44,6 +44,11 @@ export { emptyCost, findPricing, sumCosts, usageCost } from './llm/pricing.ts'
 export { LlmHttpError, LlmStreamError } from './llm/retry.ts'
 export { readSseData, StreamIdleTimeoutError } from './llm/sse.ts'
 export { LOG_LEVELS, type LogLevel, levelEnabled, parseLogLevel } from './logging.ts'
+export {
+  type ModelPreset,
+  type ModelRecommendation,
+  recommendModels,
+} from './models/recommend.ts'
 export { DIFFICULTY_ORDER, decideEscalation, nextDifficulty } from './pipeline/escalation.ts'
 export { estimateJob } from './pipeline/estimate.ts'
 export { buildEvalRecord, promptOverrideHash, wordCount } from './pipeline/evalRecord.ts'

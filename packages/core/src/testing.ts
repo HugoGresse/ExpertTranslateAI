@@ -63,6 +63,7 @@ export const sampleJob = (overrides: Partial<TranslationJob> = {}): TranslationJ
     routing: [],
     backTranslate: false,
     promptOverrides: {},
+    suggestGlossary: false,
   },
   status: 'queued',
   ...overrides,

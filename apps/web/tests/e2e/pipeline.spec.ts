@@ -54,12 +54,20 @@ test('normal difficulty runs brief, two translators, review, finalize and score'
     route.fulfill({ json: { data: [] } }),
   )
   await page.route('https://openrouter.ai/api/v1/chat/completions', (route) => {
-    const body = route.request().postDataJSON() as { model: string }
+    const body = route.request().postDataJSON() as {
+      model: string
+      messages: { content: string }[]
+    }
     models.push(body.model)
+    const glossary = body.messages[0]?.content.includes('terminologist')
     return route.fulfill({
       status: 200,
       headers: { 'content-type': 'text/event-stream' },
-      body: sse(replies[body.model] ?? 'x'),
+      body: sse(
+        glossary
+          ? JSON.stringify([{ source: 'Hello', target: 'Bonjour', kind: 'preferred' }])
+          : (replies[body.model] ?? 'x'),
+      ),
     })
   })
 
@@ -75,8 +83,15 @@ test('normal difficulty runs brief, two translators, review, finalize and score'
   await expect(page.getByText('too casual')).toBeVisible()
   await page.getByRole('button', { name: /Compare candidates/ }).click()
   await expect(page.getByText('Salut B')).toBeVisible()
+  await expect(page.getByText('Suggested glossary terms (1)')).toBeVisible()
+  await page.getByRole('button', { name: 'Add 1 to glossary' }).click()
+  await expect(page.getByText(/Added 1 term/)).toBeVisible()
+  await page.goto('/glossary')
+  await expect(page.getByRole('heading', { name: 'Entries in Suggested terms (1)' })).toBeVisible()
+  await expect(page.getByRole('cell', { name: 'Bonjour' })).toBeVisible()
   expect(models.sort()).toEqual([
     'test/finalizer',
+    'test/helper',
     'test/helper',
     'test/model',
     'test/model-b',

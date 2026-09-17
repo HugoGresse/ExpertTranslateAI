@@ -38,6 +38,7 @@ const resultFor = (jobId: string): TargetResult => ({
   disagreements: [],
   escalations: [],
   backTranslation: null,
+  glossarySuggestions: [],
   cost: { usd: 0, calls: 1, tokensIn: 1, tokensOut: 1 },
   trace: [],
   status: 'done',

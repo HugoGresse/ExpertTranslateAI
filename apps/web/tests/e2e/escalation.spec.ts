@@ -44,7 +44,7 @@ test('candidate disagreement escalates normal to hard and routing picks the lega
     }
     models.push(body.model)
     const replies: Record<string, string> = {
-      'test/helper': brief,
+      'test/helper': body.messages[0]?.content.includes('terminologist') ? '[]' : brief,
       'legal/model': 'Il y a 12 clauses.',
       'test/model-b': 'Il y a 21 clauses.',
       'test/model-c': 'Il y a 12 clauses.',

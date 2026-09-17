@@ -24,7 +24,8 @@ export function estimateJob(
     chunkCount * perChunk * job.targets.length +
     (needsBrief(job) ? 1 : 0) +
     (plan.score ? job.targets.length : 0) +
-    (plan.backTranslate || job.options.backTranslate ? 2 * job.targets.length : 0)
+    (plan.backTranslate || job.options.backTranslate ? 2 * job.targets.length : 0) +
+    (job.options.suggestGlossary && plan.finalize ? job.targets.length : 0)
   const contextTokens = sources
     .filter((s) => isRelevantSource(s, job) && job.options.contextSourceIds.includes(s.id))
     .reduce((acc, s) => acc + Math.min(countTokens(s.rawText), job.options.contextTokenBudget), 0)

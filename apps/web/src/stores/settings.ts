@@ -27,6 +27,7 @@ export type Settings = {
   autoEscalate: 'true' | 'false'
   escalationConfidence: string
   backTranslate: 'true' | 'false'
+  suggestGlossary: 'true' | 'false'
   contextTokenBudget: string
   guidelinesTokenBudget: string
   sourceLang: string
@@ -60,6 +61,7 @@ export const $settings = persistentMap<Settings>('eta.settings.', {
   autoEscalate: 'true',
   escalationConfidence: '60',
   backTranslate: 'false',
+  suggestGlossary: 'true',
   contextTokenBudget: '4000',
   guidelinesTokenBudget: '1500',
   sourceLang: 'auto',

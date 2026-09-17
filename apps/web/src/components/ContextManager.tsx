@@ -1,11 +1,4 @@
-import {
-  type ContextKind,
-  type ContextSource,
-  contentHash,
-  countTokens,
-  isLlmsTxt,
-  needsCondense,
-} from '@experttranslate/core'
+import { type ContextSource, contentHash, countTokens, needsCondense } from '@experttranslate/core'
 import { useStore } from '@nanostores/react'
 import { type FC, useMemo, useState } from 'react'
 import { browserFetch } from '../adapters/browserFetch'
@@ -13,33 +6,13 @@ import { storage } from '../adapters/dexieStorage'
 import { logger } from '../adapters/logger'
 import { LANGUAGES, languageName } from '../data/languages'
 import { useRepo } from '../hooks/useRepo'
-import { readTextFile, TEXT_FILE_ACCEPT } from '../lib/files'
+import { type ContextInputMode, createContextSource } from '../lib/contextSources'
+import { TEXT_FILE_ACCEPT } from '../lib/files'
 import { normalizeUrl } from '../lib/url'
 import { $settings, numberSetting } from '../stores/settings'
 import { Button, Card, Field, inputClass } from './ui'
 
-type Mode = 'url' | 'file' | 'paste'
-
-async function buildSource(input: {
-  name: string
-  kind: ContextKind
-  url?: string
-  rawText: string
-  lang?: string
-}): Promise<ContextSource> {
-  const source: ContextSource = {
-    id: crypto.randomUUID(),
-    name: input.name,
-    kind: input.kind,
-    rawText: input.rawText,
-    contentHash: await contentHash(input.rawText),
-    enabled: true,
-    createdAt: Date.now(),
-    ...(input.url ? { url: input.url, fetchedAt: Date.now() } : {}),
-    ...(input.lang ? { lang: input.lang } : {}),
-  }
-  return source
-}
+type Mode = ContextInputMode
 
 const AddSourceForm: FC<{ onAdd: (s: ContextSource) => Promise<void> }> = ({ onAdd }) => {
   const [mode, setMode] = useState<Mode>('url')
@@ -63,34 +36,7 @@ const AddSourceForm: FC<{ onAdd: (s: ContextSource) => Promise<void> }> = ({ onA
     setBusy(true)
     setError(null)
     try {
-      let rawText = text
-      let kind: ContextKind = 'pasted'
-      let sourceUrl: string | undefined
-      if (mode === 'url') {
-        sourceUrl = normalizeUrl(url)
-        const { body } = await browserFetch.text(sourceUrl)
-        rawText = body
-        kind = isLlmsTxt(body, sourceUrl) ? 'llms-txt' : 'markdown-url'
-      } else if (mode === 'file') {
-        if (!file) throw new Error('Choose a file first')
-        rawText = await readTextFile(file)
-        kind = isLlmsTxt(rawText, file.name) ? 'llms-txt' : 'markdown-file'
-      } else if (isLlmsTxt(rawText)) {
-        kind = 'llms-txt'
-      }
-      if (rawText.trim().length === 0) throw new Error('The source is empty')
-      const finalName =
-        name.trim() || (sourceUrl ? new URL(sourceUrl).hostname : file?.name) || 'Pasted context'
-      await onAdd(
-        await buildSource({
-          name: finalName,
-          kind,
-          rawText,
-          ...(sourceUrl ? { url: sourceUrl } : {}),
-          ...(lang ? { lang } : {}),
-        }),
-      )
-      logger.info('context.added', { kind, chars: rawText.length })
+      await onAdd(await createContextSource({ mode, url, file, text, name, lang }))
       reset()
     } catch (e) {
       logger.warn('context.addFailed', { error: String(e) })
