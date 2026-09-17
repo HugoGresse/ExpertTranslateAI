@@ -45,6 +45,17 @@ export { LlmHttpError, LlmStreamError } from './llm/retry.ts'
 export { readSseData, StreamIdleTimeoutError, StreamStallError } from './llm/sse.ts'
 export { LOG_LEVELS, type LogLevel, levelEnabled, parseLogLevel } from './logging.ts'
 export {
+  formatContext,
+  formatModelPrice,
+  type GroupedModels,
+  groupModels,
+  isAliasModel,
+  LATEST_MAJOR_COUNT,
+  MAJOR_MODEL_AUTHORS,
+  type ModelGroup,
+  modelAuthor,
+} from './models/catalog.ts'
+export {
   type ModelPreset,
   type ModelRecommendation,
   recommendModels,

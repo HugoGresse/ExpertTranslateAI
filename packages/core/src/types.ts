@@ -474,6 +474,8 @@ export interface ModelPricing {
 export interface ModelInfo {
   id: string
   name: string
+  /** Unix seconds the model was published, when the catalog reports it; ranks 'latest'. */
+  created?: number
   contextLength: number
   pricing: ModelPricing
   supportsStructuredOutput: boolean

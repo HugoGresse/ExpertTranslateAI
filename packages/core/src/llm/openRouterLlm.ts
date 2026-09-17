@@ -62,6 +62,7 @@ interface RawStreamChunk {
 interface RawModel {
   id: string
   name?: string
+  created?: number
   context_length?: number
   pricing?: { prompt?: string; completion?: string }
   supported_parameters?: string[]
@@ -81,6 +82,7 @@ export function toModelInfo(raw: RawModel): ModelInfo {
   return {
     id: raw.id,
     name: raw.name ?? raw.id,
+    ...(typeof raw.created === 'number' ? { created: raw.created } : {}),
     contextLength: raw.context_length ?? 0,
     pricing: {
       promptUsdPerToken: Number(raw.pricing?.prompt ?? 0),
