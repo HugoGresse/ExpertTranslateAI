@@ -173,9 +173,10 @@ export function recommendModels(catalog: ModelInfo[], preset: ModelPreset): Mode
     },
     // Every role got a reason above or falls back to translatorA's.
     reasons: Object.fromEntries(
-      (Object.keys(SPECS.reduce((acc, s) => ({ ...acc, [s.role]: true }), {})) as Role[]).map(
-        (r) => [r, reasons[r] ?? reasons.translatorA ?? fallback.model.name],
-      ),
+      SPECS.map((s) => s.role).map((r) => [
+        r,
+        reasons[r] ?? reasons.translatorA ?? fallback.model.name,
+      ]),
     ) as Record<Role, string>,
   }
 }
