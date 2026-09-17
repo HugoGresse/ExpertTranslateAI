@@ -118,7 +118,7 @@ export const PipelineBoard: FC<PipelineBoardProps> = (props) => {
   const done = props.progress.status === 'done'
   return (
     <ol
-      className="grid gap-2"
+      className="grid gap-2 overflow-x-auto pb-1"
       style={{ gridTemplateColumns: `repeat(${cards.length}, minmax(140px, 1fr))` }}
     >
       {cards.map((card) => {
