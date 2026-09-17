@@ -73,6 +73,7 @@ test('context can be pasted right in the workspace and is used immediately', asy
   await mockModels(page)
   const seen = await mockChat(page, () => 'Bonjour')
   await page.goto('/')
+  await page.getByRole('button', { name: '+ add' }).click()
   await page.getByRole('button', { name: 'Paste text' }).click()
   await page.getByLabel('Context text').fill('# Product\nThe product is called Zephyr.')
   await page.getByRole('button', { name: 'Add and use' }).click()

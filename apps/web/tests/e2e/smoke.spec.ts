@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test'
 test('home page renders the workspace and key gate', async ({ page }) => {
   await page.goto('/')
   await expect(page.getByRole('heading', { name: 'Source' })).toBeVisible()
-  await expect(page.getByText('No OpenRouter key on this device.')).toBeVisible()
+  await expect(page.getByText('Connect OpenRouter')).toBeVisible()
 })
 
 test('settings page accepts a pasted key and lists models from a mocked catalog', async ({

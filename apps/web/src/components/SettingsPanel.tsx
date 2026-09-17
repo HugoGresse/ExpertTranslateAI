@@ -9,6 +9,7 @@ import { useModels } from '../hooks/useModels'
 import { $settings } from '../stores/settings'
 import { DataCard } from './DataCard'
 import { KeyVaultCard, UnlockForm } from './KeyVaultCard'
+import { ModelAutoPick } from './ModelAutoPick'
 import { ModelPicker } from './ModelPicker'
 import { RoleModelsCard } from './RoleModelsCard'
 import { ServerCard } from './ServerCard'
@@ -106,6 +107,13 @@ const KeySection: FC = () => {
   )
 }
 
+const SECTIONS = [
+  { id: 'connection', label: 'Connection' },
+  { id: 'quality', label: 'Quality & models' },
+  { id: 'defaults', label: 'Defaults' },
+  { id: 'data', label: 'Your data' },
+] as const
+
 export const SettingsPanel: FC = () => {
   const settings = useStore($settings)
   const vaultReplaced =
@@ -114,88 +122,119 @@ export const SettingsPanel: FC = () => {
   const { models, loading, refresh } = useModels()
 
   return (
-    <div className="grid gap-4 md:grid-cols-2">
-      {vaultReplaced ? (
-        <p className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm md:col-span-2">
-          The new key from OpenRouter replaced your encrypted key and is stored unencrypted. Encrypt
-          it again below if you want it protected.
-        </p>
-      ) : null}
-      <KeySection />
-      <ServerCard />
-      <RoleModelsCard />
-      <DataCard />
-      <Card title="Defaults">
-        <div className="flex flex-col gap-3">
-          <Field label="Translator model">
-            <ModelPicker
-              models={models}
-              value={settings.translatorModel}
-              loading={loading}
-              onChange={(id) => $settings.setKey('translatorModel', id)}
-            />
-            <Button className="self-start" onClick={refresh}>
-              Refresh catalog
-            </Button>
-          </Field>
-          <Field
-            label="Context budget (tokens per source)"
-            hint="Sources above this size are condensed once by the helper model."
-          >
-            <input
-              className={inputClass}
-              type="number"
-              min={500}
-              max={32000}
-              value={settings.contextTokenBudget}
-              onChange={(e) => $settings.setKey('contextTokenBudget', e.target.value)}
-            />
-          </Field>
-          <Field label="Guidelines budget (tokens)">
-            <input
-              className={inputClass}
-              type="number"
-              min={200}
-              max={8000}
-              value={settings.guidelinesTokenBudget}
-              onChange={(e) => $settings.setKey('guidelinesTokenBudget', e.target.value)}
-            />
-          </Field>
-          <Field
-            label="Max tokens per chunk"
-            hint="Longer texts are split into balanced chunks of at most this size."
-          >
-            <input
-              className={inputClass}
-              type="number"
-              min={200}
-              max={8000}
-              value={settings.maxTokensPerChunk}
-              onChange={(e) => $settings.setKey('maxTokensPerChunk', e.target.value)}
-            />
-          </Field>
-          <Field label="Parallel requests" hint="Concurrent calls to OpenRouter.">
-            <input
-              className={inputClass}
-              type="number"
-              min={1}
-              max={16}
-              value={settings.concurrency}
-              onChange={(e) => $settings.setKey('concurrency', e.target.value)}
-            />
-          </Field>
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={settings.preserveFormatting === 'true'}
-              onChange={(e) =>
-                $settings.setKey('preserveFormatting', e.target.checked ? 'true' : 'false')
-              }
-            />
-            Preserve Markdown formatting
-          </label>
-        </div>
-      </Card>
+    <div className="grid gap-5 lg:grid-cols-[200px_minmax(0,1fr)]">
+      <nav aria-label="Settings sections" className="lg:sticky lg:top-4 lg:self-start">
+        <ul className="flex flex-wrap gap-1 lg:flex-col">
+          {SECTIONS.map((s) => (
+            <li key={s.id}>
+              <a
+                href={`#${s.id}`}
+                className="block rounded-lg px-3 py-1.5 text-sm font-medium text-body hover:bg-neutral-100 hover:text-fg"
+              >
+                {s.label}
+              </a>
+            </li>
+          ))}
+        </ul>
+      </nav>
+      <div className="flex flex-col gap-5">
+        {vaultReplaced ? (
+          <p className="rounded-xl border border-warning/40 bg-warning-bg p-3 text-sm">
+            The new key from OpenRouter replaced your encrypted key and is stored unencrypted.
+            Encrypt it again below if you want it protected.
+          </p>
+        ) : null}
+        <section id="connection" className="grid gap-5 md:grid-cols-2 scroll-mt-4">
+          <KeySection />
+          <ServerCard />
+        </section>
+        <section id="quality" className="grid gap-5 scroll-mt-4">
+          <Card title="Quality & models">
+            <p className="mb-3 text-sm text-body">
+              The translator model is the promise; the other roles follow it unless set below. A
+              preset fills every role from the live catalog.
+            </p>
+            <Field label="Translator model">
+              <ModelPicker
+                models={models}
+                value={settings.translatorModel}
+                loading={loading}
+                onChange={(id) => $settings.setKey('translatorModel', id)}
+              />
+              <Button className="self-start" size="sm" onClick={refresh}>
+                Refresh catalog
+              </Button>
+            </Field>
+            <ModelAutoPick models={models} />
+          </Card>
+          <RoleModelsCard />
+        </section>
+        <section id="defaults" className="scroll-mt-4">
+          <Card title="Defaults">
+            <div className="flex flex-col gap-3">
+              <Field
+                label="Context budget (tokens per source)"
+                hint="Sources above this size are condensed once by the helper model."
+              >
+                <input
+                  className={inputClass}
+                  type="number"
+                  min={500}
+                  max={32000}
+                  value={settings.contextTokenBudget}
+                  onChange={(e) => $settings.setKey('contextTokenBudget', e.target.value)}
+                />
+              </Field>
+              <Field label="Guidelines budget (tokens)">
+                <input
+                  className={inputClass}
+                  type="number"
+                  min={200}
+                  max={8000}
+                  value={settings.guidelinesTokenBudget}
+                  onChange={(e) => $settings.setKey('guidelinesTokenBudget', e.target.value)}
+                />
+              </Field>
+              <Field
+                label="Max tokens per chunk"
+                hint="Longer texts are split into balanced chunks of at most this size."
+              >
+                <input
+                  className={inputClass}
+                  type="number"
+                  min={200}
+                  max={8000}
+                  value={settings.maxTokensPerChunk}
+                  onChange={(e) => $settings.setKey('maxTokensPerChunk', e.target.value)}
+                />
+              </Field>
+              <Field label="Parallel requests" hint="Concurrent calls to OpenRouter.">
+                <input
+                  className={inputClass}
+                  type="number"
+                  min={1}
+                  max={16}
+                  value={settings.concurrency}
+                  onChange={(e) => $settings.setKey('concurrency', e.target.value)}
+                />
+              </Field>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={settings.preserveFormatting === 'true'}
+                  onChange={(e) =>
+                    $settings.setKey('preserveFormatting', e.target.checked ? 'true' : 'false')
+                  }
+                />
+                Preserve Markdown formatting
+              </label>
+            </div>
+          </Card>
+        </section>
+        <section id="data" className="scroll-mt-4">
+          <DataCard />
+        </section>
+      </div>
     </div>
   )
 }

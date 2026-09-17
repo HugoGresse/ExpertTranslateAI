@@ -37,7 +37,7 @@ test('glossary scope and memory reach the prompt, violations are reported, corre
   await expect(page.getByRole('cell', { name: 'flux de travail' })).toBeVisible()
 
   await page.goto('/')
-  await page.getByRole('button', { name: 'Acme (client)' }).click()
+  await page.getByRole('button', { name: 'Acme', exact: true }).click()
   await page.getByPlaceholder('Paste text or Markdown to translate…').fill('Open the workflow.')
   await page.getByRole('button', { name: 'Translate' }).click()
   await expect(page.getByText('Glossary: 1 violation')).toBeVisible()

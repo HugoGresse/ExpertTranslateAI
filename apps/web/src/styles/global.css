@@ -1,12 +1,76 @@
 @import "tailwindcss";
 
+/*
+ * Tokens derived from the Toss reference design system (DESIGN.md): product primary blue,
+ * warm blue-grey neutrals, flat layering, 10–16px radii. Values marked "extension" are ours.
+ */
 @theme {
-  --color-ink: #1b1b1f;
-  --color-paper: #fafaf7;
-  --color-accent: #2f6df6;
+  --font-sans:
+    "Toss Product Sans", "Pretendard", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+
+  --color-primary: #3182f6;
+  --color-primary-strong: #2272eb;
+  --color-on-primary: #ffffff;
+  --color-weak-bg: #e8f3ff;
+  --color-weak-fg: #1b64da;
+  --color-canvas: #ffffff;
+  --color-surface: #f2f4f6;
+  --color-fg: #191f28;
+  --color-body: #4e5968;
+  --color-muted: #8b95a1;
+  --color-line: #e5e8eb;
+  --color-danger: #e42939;
+  /* extensions: no verified Toss token for success or warning */
+  --color-success: #12a56b;
+  --color-success-bg: #e8f8f1;
+  --color-warning: #d97706;
+  --color-warning-bg: #fff4e0;
+
+  /* Warm blue-grey neutrals so every existing neutral-* class picks up the same family. */
+  --color-neutral-50: #f9fafb;
+  --color-neutral-100: #f2f4f6;
+  --color-neutral-200: #e5e8eb;
+  --color-neutral-300: #d1d6db;
+  --color-neutral-400: #b0b8c1;
+  --color-neutral-500: #8b95a1;
+  --color-neutral-600: #6b7684;
+  --color-neutral-700: #4e5968;
+  --color-neutral-800: #333d4b;
+  --color-neutral-900: #191f28;
+
+  /* Aliases kept for older classes (text-accent, bg-paper, text-ink). */
+  --color-accent: #3182f6;
+  --color-ink: #191f28;
+  --color-paper: #f2f4f6;
+  --color-blue-50: #e8f3ff;
+
+  --radius-control: 10px;
+  --radius-card: 16px;
 }
 
 html {
-  color: var(--color-ink);
-  background: var(--color-paper);
+  color: var(--color-fg);
+  background: var(--color-surface);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3 {
+  text-wrap: balance;
+  letter-spacing: -0.01em;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }

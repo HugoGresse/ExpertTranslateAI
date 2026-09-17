@@ -1,20 +1,12 @@
 import type { FC } from 'react'
 import { languageLabel } from '../data/languages'
 import type { RunState } from '../stores/run'
-import { formatUsd } from './ui'
-
-export const Spinner: FC<{ className?: string }> = ({ className = '' }) => (
-  <span
-    role="status"
-    aria-label="Working"
-    className={`inline-block h-4 w-4 animate-spin rounded-full border-2 border-accent border-t-transparent ${className}`}
-  />
-)
+import { formatUsd, Spinner } from './ui'
 
 const STATUS_ICON: Record<string, string> = { done: '✓', failed: '!', pending: '·' }
 
 /** What the app is doing right now: one line per target plus the running cost. */
-export const RunStatus: FC<{ run: RunState }> = ({ run }) => {
+export const RunStatus: FC<{ run: RunState; compact?: boolean }> = ({ run, compact = false }) => {
   const targets = Object.values(run.targets)
   const running = run.status === 'running'
   const done = targets.filter((t) => t.status === 'done').length
@@ -39,7 +31,7 @@ export const RunStatus: FC<{ run: RunState }> = ({ run }) => {
           {running ? ' so far' : ''}
         </span>
       </div>
-      {running ? (
+      {running && !compact ? (
         <ul className="flex flex-col gap-0.5 text-neutral-600">
           {targets.map((t) => (
             <li key={`${t.lang}#${t.region ?? ''}`} className="flex items-center gap-2">

@@ -75,6 +75,8 @@ export const $settings = persistentMap<Settings>('eta.settings.', {
   serverToken: '',
 })
 
+export const $onboardingDone = persistentAtom<string>('eta.onboarding.done', 'false')
+
 export const usesServer = (s: Pick<Settings, 'serverUrl'>): boolean => s.serverUrl.trim() !== ''
 
 const jsonListCodec = <T>(isItem: (x: unknown) => x is T) => ({

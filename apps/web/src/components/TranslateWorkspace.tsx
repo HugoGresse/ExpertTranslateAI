@@ -15,12 +15,13 @@ import { storage } from '../adapters/dexieStorage'
 import { createEngineHandle } from '../adapters/engineFactory'
 import { $apiKey } from '../adapters/keyVault'
 import { logger } from '../adapters/logger'
-import { LANGUAGES } from '../data/languages'
+import { LANGUAGES, languageName } from '../data/languages'
 import { useModels } from '../hooks/useModels'
 import { useRepo } from '../hooks/useRepo'
 import { pickOneOf } from '../lib/guards'
-import { $run, applyProgress, idleRun } from '../stores/run'
+import { $run, applyProgress, beginRun, idleRun } from '../stores/run'
 import {
+  $onboardingDone,
   $promptOverrides,
   $routing,
   $selectedContextIds,
@@ -37,16 +38,13 @@ import {
   usesServer,
 } from '../stores/settings'
 import { ContextQuickAdd } from './ContextQuickAdd'
-import { KeyGate } from './KeyGate'
-import { MaterialChips } from './MaterialChips'
-import { ModelAutoPick } from './ModelAutoPick'
-import { ModelPicker } from './ModelPicker'
+import { FirstRunCard } from './FirstRunCard'
 import { BriefCard } from './ResultDetails'
 import { ResultPanel } from './ResultPanel'
 import { RunStatus } from './RunStatus'
 import { SourceInput } from './SourceInput'
 import { TargetPicker } from './TargetPicker'
-import { Button, Card, Field, formatUsd, inputClass } from './ui'
+import { Button, basePath, Card, Chip, Field, formatUsd, inputClass, Segmented } from './ui'
 
 const DOMAIN_OPTIONS = [
   'auto',
@@ -59,6 +57,16 @@ const DOMAIN_OPTIONS = [
   'ui',
 ] as const
 const DIFFICULTY_OPTIONS = ['auto', 'simple', 'normal', 'hard'] as const
+
+const QUALITY: Array<{ value: (typeof DIFFICULTY_OPTIONS)[number]; label: string; hint: string }> =
+  [
+    { value: 'simple', label: 'Fast', hint: 'One model, no review' },
+    { value: 'normal', label: 'Balanced', hint: 'Two translators, review, finalize, score' },
+    { value: 'hard', label: 'Best', hint: 'Three translators, review, judge, finalize, score' },
+    { value: 'auto', label: 'Auto', hint: 'The brief decides' },
+  ]
+
+const shortModel = (id: string): string => (id.split('/')[1] ?? id).replace(/-\d{4,}$/, '')
 
 interface Selection {
   contextSourceIds: string[]
@@ -137,6 +145,8 @@ export const TranslateWorkspace: FC = () => {
   const { models, loading } = useModels()
   const controller = useRef<AbortController | null>(null)
   const [estimate, setEstimate] = useState<JobEstimate | null>(null)
+  const [styleOpen, setStyleOpen] = useState(false)
+  const [addContext, setAddContext] = useState(false)
   const selection = useMemo<Selection>(
     () => ({
       contextSourceIds: selectedContextIds.filter((id) =>
@@ -197,6 +207,7 @@ export const TranslateWorkspace: FC = () => {
     if (!engineFactory) return
     const job = buildJob(source, settings, targets, selection)
     controller.current = new AbortController()
+    beginRun(job.difficulty)
     logger.info('run.start', {
       jobId: job.id,
       targets: job.targets.length,
@@ -208,6 +219,7 @@ export const TranslateWorkspace: FC = () => {
       })) {
         applyProgress(event)
       }
+      if ($run.get().status === 'done') $onboardingDone.set('true')
     } catch (error) {
       logger.error('run.failed', { error: String(error) })
       $run.setKey('status', 'failed')
@@ -222,228 +234,346 @@ export const TranslateWorkspace: FC = () => {
 
   const busy = run.status === 'running'
   const canRun = engineFactory !== null && !busy && source.trim().length > 0 && targets.length > 0
+  const resolved = roleModels(settings)
+  const translators = [
+    ...new Set([resolved.translatorA, resolved.translatorB, resolved.translatorC]),
+  ]
+  const styleSummary = [
+    settings.formality !== 'auto' ? settings.formality : null,
+    settings.tone || null,
+    settings.audience ? `for ${settings.audience}` : null,
+    settings.domain !== 'auto' ? settings.domain : null,
+    settings.backTranslate === 'true' ? 'back-translate' : null,
+  ].filter(Boolean)
+  const wordCount = source.trim() ? source.trim().split(/\s+/).length : 0
+
+  const translateButton = (
+    <Button
+      variant="primary"
+      size="lg"
+      className="w-full"
+      disabled={!canRun}
+      loading={busy}
+      onClick={() => void start()}
+    >
+      {busy ? 'Translating…' : 'Translate'}
+      {!busy && estimate?.estimatedUsd !== null && estimate?.estimatedUsd !== undefined
+        ? ` · est. ${formatUsd(estimate.estimatedUsd)}`
+        : ''}
+    </Button>
+  )
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-      <div className="sticky top-0 z-10 -mx-4 border-b border-neutral-200 bg-white/95 px-4 py-2 backdrop-blur lg:col-span-2">
-        <div className="flex flex-wrap items-center gap-3">
-          <Button variant="primary" disabled={!canRun} onClick={() => void start()}>
-            {busy ? 'Translating…' : 'Translate'}
-          </Button>
-          {busy ? (
-            <Button variant="danger" onClick={cancel}>
-              Cancel
-            </Button>
-          ) : null}
-          {run.status !== 'idle' && !busy ? (
-            <Button variant="ghost" onClick={() => $run.set(idleRun)}>
-              Clear
-            </Button>
-          ) : null}
-          {estimate && run.status === 'idle' ? (
-            <span className="text-xs text-neutral-600">
-              ~{estimate.sourceTokens} tokens · {estimate.chunkCount} chunk
-              {estimate.chunkCount > 1 ? 's' : ''} · {estimate.callCount} calls
-              {estimate.estimatedUsd !== null ? (
-                <>
-                  {' · est. '}
-                  <strong>{formatUsd(estimate.estimatedUsd)}</strong>
-                </>
-              ) : (
-                ''
-              )}
+    <div className="flex flex-col gap-5">
+      <FirstRunCard />
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_400px]">
+        <Card
+          title="Source"
+          actions={
+            <span className="text-xs text-muted">
+              {wordCount > 0
+                ? `${wordCount} words · ${settings.sourceLang === 'auto' ? 'language auto-detected' : languageName(settings.sourceLang)}`
+                : 'Paste text or Markdown, or drop a file'}
             </span>
-          ) : null}
-          {run.status !== 'idle' ? (
-            <div className="min-w-0 flex-1">
-              <RunStatus run={run} />
-            </div>
-          ) : null}
-        </div>
-      </div>
-      <div className="flex flex-col gap-4">
-        {!apiKey && !remote ? <KeyGate /> : null}
-        <Card title="Source">
+          }
+        >
           <SourceInput value={source} onChange={(text) => $sourceDraft.set(text)} />
-          <div className="mt-2 grid gap-3 sm:grid-cols-2">
-            <Field label="Source language">
-              <select
-                className={inputClass}
-                value={settings.sourceLang}
-                onChange={(e) => $settings.setKey('sourceLang', e.target.value)}
-              >
-                <option value="auto">Auto-detect</option>
-                {LANGUAGES.map((l) => (
-                  <option key={l.code} value={l.code}>
-                    {l.name}
-                  </option>
+        </Card>
+
+        <Card title="Recipe" className="self-start">
+          <dl className="flex flex-col divide-y divide-line text-sm">
+            <div className="grid grid-cols-[88px_1fr] gap-3 py-3">
+              <dt className="pt-1 font-semibold text-body">Into</dt>
+              <dd>
+                <TargetPicker targets={targets} onChange={(t) => $targets.set(t)} />
+              </dd>
+            </div>
+            <div className="grid grid-cols-[88px_1fr] gap-3 py-3">
+              <dt className="pt-1 font-semibold text-body">Quality</dt>
+              <dd className="flex flex-col gap-1">
+                <Segmented
+                  label="Quality"
+                  options={QUALITY}
+                  value={settings.difficulty}
+                  onChange={(v) => $settings.setKey('difficulty', v)}
+                />
+                <span className="text-xs text-muted">
+                  {QUALITY.find((q) => q.value === settings.difficulty)?.hint}
+                </span>
+              </dd>
+            </div>
+            <div className="grid grid-cols-[88px_1fr] gap-3 py-3">
+              <dt className="pt-0.5 font-semibold text-body">Models</dt>
+              <dd className="text-xs text-body">
+                {loading ? (
+                  'Loading catalog…'
+                ) : (
+                  <>
+                    <span className="font-medium text-fg">
+                      {translators.map(shortModel).join(' + ')}
+                    </span>
+                    {settings.difficulty !== 'simple' ? (
+                      <>
+                        {' → review '}
+                        {shortModel(resolved.reviewer)}
+                        {' → final '}
+                        {shortModel(resolved.finalizer)}
+                      </>
+                    ) : null}
+                    <br />
+                    <a href={basePath('/settings#quality')} className="text-weak-fg underline">
+                      Change models or preset
+                    </a>
+                  </>
+                )}
+              </dd>
+            </div>
+            <div className="grid grid-cols-[88px_1fr] gap-3 py-3">
+              <dt className="pt-1 font-semibold text-body">Context</dt>
+              <dd className="flex flex-wrap items-center gap-1.5">
+                {contexts.items
+                  .filter((c) => c.enabled)
+                  .map((c) => (
+                    <Chip
+                      key={c.id}
+                      active={selectedContextIds.includes(c.id)}
+                      {...(c.lang ? { title: `Only for ${languageName(c.lang)}` } : {})}
+                      onClick={() => $selectedContextIds.set(toggleId(selectedContextIds, c.id))}
+                    >
+                      {c.name}
+                    </Chip>
+                  ))}
+                <Chip onClick={() => setAddContext((v) => !v)} active={addContext}>
+                  + add
+                </Chip>
+                {addContext ? (
+                  <div className="w-full">
+                    <ContextQuickAdd
+                      onAdd={async (sourceItem) => {
+                        await contexts.save(sourceItem)
+                        $selectedContextIds.set([...$selectedContextIds.get(), sourceItem.id])
+                        setAddContext(false)
+                      }}
+                    />
+                  </div>
+                ) : null}
+              </dd>
+            </div>
+            <div className="grid grid-cols-[88px_1fr] gap-3 py-3">
+              <dt className="pt-1 font-semibold text-body">Glossary</dt>
+              <dd className="flex flex-wrap items-center gap-1.5">
+                {glossaryScopes.items.length === 0 ? (
+                  <span className="text-xs text-muted">
+                    None yet. Terms get suggested after each run.
+                  </span>
+                ) : null}
+                {glossaryScopes.items.map((g) => (
+                  <Chip
+                    key={g.id}
+                    active={selectedGlossaryIds.includes(g.id)}
+                    title={g.level}
+                    onClick={() => $selectedGlossaryIds.set(toggleId(selectedGlossaryIds, g.id))}
+                  >
+                    {g.name}
+                  </Chip>
                 ))}
-              </select>
-            </Field>
-            <Field
-              label="Domain"
-              hint="Auto: the brief detects it. Explicit domains route the helper too."
-            >
-              <select
-                className={inputClass}
-                value={settings.domain}
-                onChange={(e) =>
-                  $settings.setKey('domain', pickOneOf(DOMAIN_OPTIONS, e.target.value, 'auto'))
-                }
-              >
-                {DOMAIN_OPTIONS.map((d) => (
-                  <option key={d} value={d}>
-                    {d}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            <Field label="Difficulty" hint="Auto: the brief decides.">
-              <select
-                className={inputClass}
-                value={settings.difficulty}
-                onChange={(e) =>
-                  $settings.setKey(
-                    'difficulty',
-                    pickOneOf(DIFFICULTY_OPTIONS, e.target.value, 'auto'),
-                  )
-                }
-              >
-                <option value="auto">Auto</option>
-                <option value="simple">Simple · 1 model</option>
-                <option value="normal">Normal · 2 models + review</option>
-                <option value="hard">Hard · 3 models + review + judge</option>
-              </select>
-            </Field>
-            <Field label="Budget cap (USD, optional)">
-              <input
-                className={inputClass}
-                type="number"
-                min={0}
-                step={0.01}
-                value={settings.budgetUsd}
-                onChange={(e) => $settings.setKey('budgetUsd', e.target.value)}
-              />
-            </Field>
-            <label className="flex items-center gap-2 text-sm sm:col-span-2">
-              <input
-                type="checkbox"
-                checked={settings.backTranslate === 'true'}
-                onChange={(e) =>
-                  $settings.setKey('backTranslate', e.target.checked ? 'true' : 'false')
-                }
-              />
-              Back-translate and list meaning deltas (always on for critical)
-            </label>
-            <Field label="Formality">
-              <select
-                className={inputClass}
-                value={settings.formality}
-                onChange={(e) =>
-                  $settings.setKey('formality', e.target.value as typeof settings.formality)
-                }
-              >
-                <option value="auto">Auto</option>
-                <option value="formal">Formal</option>
-                <option value="informal">Informal</option>
-              </select>
-            </Field>
-            <Field label="Tone (optional)">
-              <input
-                className={inputClass}
-                value={settings.tone}
-                onChange={(e) => $settings.setKey('tone', e.target.value)}
-              />
-            </Field>
-            <Field label="Audience (optional)">
-              <input
-                className={inputClass}
-                value={settings.audience}
-                onChange={(e) => $settings.setKey('audience', e.target.value)}
-              />
-            </Field>
+              </dd>
+            </div>
+            <div className="grid grid-cols-[88px_1fr] gap-3 py-3">
+              <dt className="pt-1 font-semibold text-body">Guidelines</dt>
+              <dd className="flex flex-wrap items-center gap-1.5">
+                {guidelines.items.filter((g) => g.enabled).length === 0 ? (
+                  <a href={basePath('/guidelines')} className="text-xs text-weak-fg underline">
+                    Add a style guide
+                  </a>
+                ) : null}
+                {guidelines.items
+                  .filter((g) => g.enabled)
+                  .map((g) => (
+                    <Chip
+                      key={g.id}
+                      active={selectedGuidelineIds.includes(g.id)}
+                      onClick={() =>
+                        $selectedGuidelineIds.set(toggleId(selectedGuidelineIds, g.id))
+                      }
+                    >
+                      {g.name}
+                    </Chip>
+                  ))}
+              </dd>
+            </div>
+            <div className="grid grid-cols-[88px_1fr] gap-3 py-3">
+              <dt className="pt-1 font-semibold text-body">Memory</dt>
+              <dd>
+                <Chip
+                  active={useMemory}
+                  onClick={() => $useMemory.set(useMemory ? 'false' : 'true')}
+                >
+                  {useMemory ? 'Reuse past translations' : 'Off'}
+                </Chip>
+              </dd>
+            </div>
+            <div className="grid grid-cols-[88px_1fr] gap-3 py-3">
+              <dt className="pt-0.5 font-semibold text-body">Style</dt>
+              <dd className="text-xs text-body">
+                {styleSummary.length > 0 ? styleSummary.join(' · ') : 'Default tone and register'}{' '}
+                <button
+                  type="button"
+                  className="text-weak-fg underline"
+                  onClick={() => setStyleOpen((v) => !v)}
+                >
+                  {styleOpen ? 'close' : 'edit'}
+                </button>
+                {styleOpen ? (
+                  <div className="mt-2 grid gap-2">
+                    <Field label="Source language">
+                      <select
+                        className={inputClass}
+                        value={settings.sourceLang}
+                        onChange={(e) => $settings.setKey('sourceLang', e.target.value)}
+                      >
+                        <option value="auto">Auto-detect</option>
+                        {LANGUAGES.map((l) => (
+                          <option key={l.code} value={l.code}>
+                            {l.name}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                    <Field label="Formality">
+                      <select
+                        className={inputClass}
+                        value={settings.formality}
+                        onChange={(e) =>
+                          $settings.setKey('formality', e.target.value as typeof settings.formality)
+                        }
+                      >
+                        <option value="auto">Auto</option>
+                        <option value="formal">Formal</option>
+                        <option value="informal">Informal</option>
+                      </select>
+                    </Field>
+                    <Field label="Tone">
+                      <input
+                        className={inputClass}
+                        placeholder="e.g. warm, concise"
+                        value={settings.tone}
+                        onChange={(e) => $settings.setKey('tone', e.target.value)}
+                      />
+                    </Field>
+                    <Field label="Audience">
+                      <input
+                        className={inputClass}
+                        placeholder="e.g. developers"
+                        value={settings.audience}
+                        onChange={(e) => $settings.setKey('audience', e.target.value)}
+                      />
+                    </Field>
+                    <Field label="Domain" hint="Auto lets the brief detect it.">
+                      <select
+                        className={inputClass}
+                        value={settings.domain}
+                        onChange={(e) =>
+                          $settings.setKey(
+                            'domain',
+                            pickOneOf(DOMAIN_OPTIONS, e.target.value, 'auto'),
+                          )
+                        }
+                      >
+                        {DOMAIN_OPTIONS.map((d) => (
+                          <option key={d} value={d}>
+                            {d}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                    <label className="flex items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={settings.backTranslate === 'true'}
+                        onChange={(e) =>
+                          $settings.setKey('backTranslate', e.target.checked ? 'true' : 'false')
+                        }
+                      />
+                      Back-translate and list meaning deltas
+                    </label>
+                  </div>
+                ) : null}
+              </dd>
+            </div>
+            <div className="grid grid-cols-[88px_1fr] gap-3 py-3">
+              <dt className="pt-1 font-semibold text-body">Cap</dt>
+              <dd className="flex items-center gap-2 text-xs text-body">
+                <span>$</span>
+                <input
+                  className={`${inputClass} w-24`}
+                  type="number"
+                  min={0}
+                  step={0.05}
+                  placeholder="none"
+                  aria-label="Budget cap in USD"
+                  value={settings.budgetUsd}
+                  onChange={(e) => $settings.setKey('budgetUsd', e.target.value)}
+                />
+                <span>per run</span>
+              </dd>
+            </div>
+          </dl>
+          <div className="mt-4 flex flex-col gap-2">
+            {translateButton}
+            {busy ? (
+              <Button variant="danger" onClick={cancel}>
+                Cancel
+              </Button>
+            ) : null}
+            {estimate ? (
+              <p className="text-center text-xs text-muted">
+                ~{estimate.sourceTokens} tokens · {estimate.chunkCount} chunk
+                {estimate.chunkCount > 1 ? 's' : ''} · {estimate.callCount} calls
+                {!engineFactory && !remote ? ' · connect a key to run' : ''}
+              </p>
+            ) : null}
           </div>
         </Card>
-        <Card title="Targets">
-          <TargetPicker targets={targets} onChange={(t) => $targets.set(t)} />
-        </Card>
-        <Card title="Context and guidelines">
-          <MaterialChips
-            label="Context"
-            emptyHint="No context yet. Paste notes, a URL or a file below; manage them on the Context page."
-            items={contexts.items
-              .filter((c) => c.enabled)
-              .map((c) => ({ id: c.id, name: c.name, lang: c.lang }))}
-            selected={selectedContextIds}
-            onToggle={(id) => $selectedContextIds.set(toggleId(selectedContextIds, id))}
-          />
-          <ContextQuickAdd
-            onAdd={async (source) => {
-              await contexts.save(source)
-              $selectedContextIds.set([...$selectedContextIds.get(), source.id])
+      </div>
+
+      {run.status !== 'idle' ? (
+        <Card
+          title="Pipeline"
+          actions={
+            <div className="flex items-center gap-3">
+              <RunStatus run={run} compact />
+              {!busy ? (
+                <Button variant="ghost" size="sm" onClick={() => $run.set(idleRun)}>
+                  Clear
+                </Button>
+              ) : null}
+            </div>
+          }
+        >
+          {run.error ? <p className="mb-2 text-sm text-danger">{run.error}</p> : null}
+          {run.status === 'cancelled' ? (
+            <p className="mb-2 text-sm text-warning">Cancelled.</p>
+          ) : null}
+          {run.brief ? <BriefCard brief={run.brief} /> : null}
+          <ResultPanel
+            targets={run.targets}
+            board={{
+              stages: run.stages,
+              difficulty: run.difficulty,
+              models: resolved,
+              suggestGlossary: settings.suggestGlossary === 'true',
+              backTranslate: settings.backTranslate === 'true',
             }}
           />
-          <MaterialChips
-            label="Glossary scopes"
-            emptyHint="No glossary scope. Create one on the Glossary page."
-            items={glossaryScopes.items.map((g) => ({
-              id: g.id,
-              name: `${g.name} (${g.level})`,
-              lang: g.lang,
-            }))}
-            selected={selectedGlossaryIds}
-            onToggle={(id) => $selectedGlossaryIds.set(toggleId(selectedGlossaryIds, id))}
-          />
-          <label className="mb-3 flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={useMemory}
-              onChange={(e) => $useMemory.set(e.target.checked ? 'true' : 'false')}
-            />
-            Use translation memory
-          </label>
-          <MaterialChips
-            label="Guidelines"
-            emptyHint="No guideline sets. Create one on the Guidelines page."
-            items={guidelines.items
-              .filter((g) => g.enabled)
-              .map((g) => ({ id: g.id, name: g.name, lang: g.lang }))}
-            selected={selectedGuidelineIds}
-            onToggle={(id) => $selectedGuidelineIds.set(toggleId(selectedGuidelineIds, id))}
-          />
+          {run.cost ? (
+            <p className="mt-4 text-sm">
+              Total: {run.cost.calls} calls · {run.cost.tokensIn} in / {run.cost.tokensOut} out ·{' '}
+              <strong>{formatUsd(run.cost.usd)}</strong>
+            </p>
+          ) : null}
         </Card>
-        <Card title="Model">
-          <ModelPicker
-            models={models}
-            value={settings.translatorModel}
-            loading={loading}
-            onChange={(id) => $settings.setKey('translatorModel', id)}
-          />
-          <ModelAutoPick models={models} />
-          <p className="mt-2 text-xs text-neutral-500">
-            Other roles (reviewer, finalizer, helper…) follow this model unless set in Settings.
-          </p>
-        </Card>
-      </div>
-      <Card title="Result">
-        {run.status === 'idle' ? (
-          <p className="text-sm text-neutral-500">
-            Results appear here. Progress and running cost show in the bar above while translating.
-          </p>
-        ) : null}
-        {run.error ? <p className="mb-2 text-sm text-red-700">{run.error}</p> : null}
-        {run.status === 'cancelled' ? (
-          <p className="mb-2 text-sm text-amber-700">Cancelled.</p>
-        ) : null}
-        {run.brief ? <BriefCard brief={run.brief} /> : null}
-        <ResultPanel targets={run.targets} />
-        {run.cost ? (
-          <p className="mt-3 text-sm">
-            Total: {run.cost.calls} calls · {run.cost.tokensIn} in / {run.cost.tokensOut} out ·{' '}
-            <strong>{formatUsd(run.cost.usd)}</strong>
-          </p>
-        ) : null}
-      </Card>
+      ) : null}
     </div>
   )
 }

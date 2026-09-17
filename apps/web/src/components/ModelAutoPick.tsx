@@ -11,7 +11,10 @@ const PRESETS: Array<{ id: ModelPreset; label: string; hint: string }> = [
 ]
 
 /** Fills every pipeline role from the live catalog with one click; each pick stays editable. */
-export const ModelAutoPick: FC<{ models: ModelInfo[] }> = ({ models }) => {
+export const ModelAutoPick: FC<{ models: ModelInfo[]; compact?: boolean }> = ({
+  models,
+  compact = false,
+}) => {
   const [preset, setPreset] = useState<ModelPreset>('balanced')
   const [summary, setSummary] = useState<Array<[Role, string]> | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -41,9 +44,13 @@ export const ModelAutoPick: FC<{ models: ModelInfo[] }> = ({ models }) => {
   }
 
   return (
-    <div className="mt-3 rounded-md border border-neutral-200 bg-neutral-50 p-2 text-sm">
+    <div
+      className={
+        compact ? 'text-sm' : 'mt-3 rounded-xl border border-line bg-neutral-50 p-3 text-sm'
+      }
+    >
       <div className="flex flex-wrap items-center gap-2">
-        <span className="font-medium">Pick models for me:</span>
+        {compact ? null : <span className="font-medium">Pick models for me:</span>}
         <select
           className={inputClass}
           aria-label="Model preset"
@@ -56,12 +63,17 @@ export const ModelAutoPick: FC<{ models: ModelInfo[] }> = ({ models }) => {
             </option>
           ))}
         </select>
-        <Button disabled={models.length === 0} onClick={pick}>
-          Auto-pick all roles
+        <Button
+          variant={compact ? 'primary' : 'secondary'}
+          size="sm"
+          disabled={models.length === 0}
+          onClick={pick}
+        >
+          {compact ? 'Use this preset' : 'Auto-pick all roles'}
         </Button>
       </div>
       {error ? <p className="mt-1 text-xs text-red-700">{error}</p> : null}
-      {summary ? (
+      {summary && !compact ? (
         <ul className="mt-2 grid gap-0.5 text-xs text-neutral-600 sm:grid-cols-2">
           {summary.map(([role, reason]) => (
             <li key={role}>

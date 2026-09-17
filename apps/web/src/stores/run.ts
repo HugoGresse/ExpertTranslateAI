@@ -1,6 +1,7 @@
 import {
   type Brief,
   type CostSummary,
+  type Difficulty,
   type ProgressEvent,
   STAGE_LABELS,
   type StageName,
@@ -23,10 +24,23 @@ export interface TargetProgress {
   error?: string
 }
 
+export interface StageProgress {
+  status: 'running' | 'done'
+  /** Calls finished for this stage. */
+  calls: number
+  running: number
+  usd: number
+  roles: string[]
+}
+
 export interface RunState {
   status: 'idle' | 'running' | 'done' | 'cancelled' | 'failed'
   jobId: string | null
+  /** Difficulty the job was started with; `auto` resolves when the brief arrives. */
+  difficulty: Difficulty | 'auto'
   brief: Brief | null
+  /** Per target key (or `*` for job-level stages), per stage. */
+  stages: Record<string, Partial<Record<StageName, StageProgress>>>
   targets: Record<string, TargetProgress>
   /** Running totals from every finished call, updated while the job is live. */
   live: CostSummary
@@ -37,7 +51,9 @@ export interface RunState {
 export const idleRun: RunState = {
   status: 'idle',
   jobId: null,
+  difficulty: 'auto',
   brief: null,
+  stages: {},
   targets: {},
   live: { usd: 0, calls: 0, tokensIn: 0, tokensOut: 0 },
   cost: null,
@@ -68,6 +84,33 @@ const emptyProgress = (lang: string, region?: string): TargetProgress => ({
   placeholders: {},
   activity: 'waiting',
 })
+
+const emptyStage = (): StageProgress => ({
+  status: 'running',
+  calls: 0,
+  running: 0,
+  usd: 0,
+  roles: [],
+})
+
+const touchStage = (
+  key: string,
+  stage: StageName,
+  update: (st: StageProgress) => StageProgress,
+): void => {
+  const stages = $run.get().stages
+  const forKey = stages[key] ?? {}
+  $run.setKey('stages', {
+    ...stages,
+    [key]: { ...forKey, [stage]: update(forKey[stage] ?? emptyStage()) },
+  })
+}
+
+/** Called by the workspace before the engine starts so the board can draw the planned stages. */
+export const beginRun = (difficulty: Difficulty | 'auto'): void => {
+  $run.set({ ...idleRun, difficulty })
+  $previews.set({})
+}
 
 const patchTarget = (
   key: string,
@@ -105,7 +148,9 @@ export function applyProgress(event: ProgressEvent): void {
       $run.set({
         status: 'running',
         jobId: event.jobId,
+        difficulty: $run.get().difficulty,
         brief: null,
+        stages: {},
         live: { usd: 0, calls: 0, tokensIn: 0, tokensOut: 0 },
         cost: null,
         error: null,
@@ -116,6 +161,7 @@ export function applyProgress(event: ProgressEvent): void {
       return
     case 'brief-done':
       $run.setKey('brief', event.brief)
+      if ($run.get().difficulty === 'auto') $run.setKey('difficulty', event.brief.difficulty)
       return
     case 'target-started':
       patchTarget(event.targetKey, {
@@ -125,6 +171,12 @@ export function applyProgress(event: ProgressEvent): void {
       })
       return
     case 'stage-started': {
+      touchStage(event.targetKey, event.stage, (st) => ({
+        ...st,
+        status: 'running',
+        running: st.running + 1,
+        roles: st.roles.includes(event.role) ? st.roles : [...st.roles, event.role],
+      }))
       if (event.targetKey === '*') {
         for (const key of Object.keys($run.get().targets))
           patchTarget(key, { activity: STAGE_LABELS[event.stage] })
@@ -149,6 +201,13 @@ export function applyProgress(event: ProgressEvent): void {
       return
     }
     case 'stage-done': {
+      touchStage(event.targetKey, event.stage, (st) => ({
+        ...st,
+        running: Math.max(0, st.running - 1),
+        status: st.running - 1 <= 0 ? 'done' : 'running',
+        calls: st.calls + 1,
+        usd: st.usd + (event.usage.costUsd ?? 0),
+      }))
       const live = $run.get().live
       $run.setKey('live', {
         usd: live.usd + (event.usage.costUsd ?? 0),

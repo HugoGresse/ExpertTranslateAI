@@ -17,6 +17,7 @@ import { downloadText } from '../lib/download'
 import { $previews, previewChunks, type TargetProgress } from '../stores/run'
 import { BackTranslationCard } from './BackTranslationCard'
 import { GlossarySuggestionsCard } from './GlossarySuggestionsCard'
+import { PipelineBoard, type PipelineBoardProps } from './PipelineBoard'
 import {
   CandidatesCard,
   DisagreementsCard,
@@ -28,6 +29,7 @@ import { Button, formatUsd } from './ui'
 
 export interface ResultPanelProps {
   targets: Record<string, TargetProgress>
+  board: Omit<PipelineBoardProps, 'targetKey' | 'progress'>
 }
 
 const TraceDrawer: FC<{ trace: TraceEvent[] }> = ({ trace }) => {
@@ -213,7 +215,7 @@ const StreamPreview: FC<{ targetKey: string; progress: TargetProgress }> = ({
   )
 }
 
-export const ResultPanel: FC<ResultPanelProps> = ({ targets }) => {
+export const ResultPanel: FC<ResultPanelProps> = ({ targets, board }) => {
   const langs = Object.keys(targets)
   const [active, setActive] = useState(langs[0] ?? '')
   useEffect(() => {
@@ -241,7 +243,7 @@ export const ResultPanel: FC<ResultPanelProps> = ({ targets }) => {
               role="tab"
               type="button"
               aria-selected={lang === active}
-              className={`px-3 py-1.5 text-sm ${lang === active ? 'border-b-2 border-accent font-medium' : 'text-neutral-600'}`}
+              className={`px-3 py-2 text-sm ${lang === active ? 'border-b-2 border-primary font-semibold text-fg' : 'text-muted hover:text-body'}`}
               onClick={() => setActive(lang)}
             >
               {languageLabel(p?.lang ?? lang, p?.region)} {badge}
@@ -249,9 +251,10 @@ export const ResultPanel: FC<ResultPanelProps> = ({ targets }) => {
           )
         })}
       </div>
-      <div className="pt-3">
+      <div className="flex flex-col gap-4 pt-4">
+        <PipelineBoard targetKey={active} progress={current} {...board} />
         {current.status === 'failed' ? (
-          <p className="text-sm text-red-700">{current.error}</p>
+          <p className="text-sm text-danger">{current.error}</p>
         ) : null}
         {current.status === 'running' ? (
           <StreamPreview targetKey={active} progress={current} />
