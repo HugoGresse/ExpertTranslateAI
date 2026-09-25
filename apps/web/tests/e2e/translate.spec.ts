@@ -70,6 +70,10 @@ test('translates into two languages with placeholders restored and stores histor
 
   await page.goto('/history')
   await expect(page.getByText('French, Spanish (Mexico) · test/model · done')).toBeVisible()
-  await page.getByRole('button', { name: 'Open' }).click()
-  await expect(page.getByText('Bonjour fr {{name}} https://example.com')).toBeVisible()
+  await page.getByRole('link', { name: 'Open' }).click()
+  await expect(page.getByRole('tab', { name: /Spanish/ })).toBeVisible()
+  await expect(page.locator('textarea').nth(1)).toHaveValue(
+    'Bonjour fr {{name}} https://example.com',
+  )
+  await expect(page.getByText(/Total: 2 calls/)).toBeVisible()
 })

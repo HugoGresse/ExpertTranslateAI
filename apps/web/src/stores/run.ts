@@ -6,6 +6,7 @@ import {
   STAGE_LABELS,
   type StageName,
   type TargetResult,
+  type TranslationJob,
   targetKey,
 } from '@experttranslate/core'
 import { map } from 'nanostores'
@@ -36,6 +37,8 @@ export interface StageProgress {
 export interface RunState {
   status: 'idle' | 'running' | 'done' | 'cancelled' | 'failed'
   jobId: string | null
+  /** The job as submitted: the recipe the header and the board describe. */
+  job: TranslationJob | null
   /** Difficulty the job was started with; `auto` resolves when the brief arrives. */
   difficulty: Difficulty | 'auto'
   brief: Brief | null
@@ -51,6 +54,7 @@ export interface RunState {
 export const idleRun: RunState = {
   status: 'idle',
   jobId: null,
+  job: null,
   difficulty: 'auto',
   brief: null,
   stages: {},
@@ -75,7 +79,7 @@ export const previewChunks = (preview: TargetPreview | undefined, chunkCount: nu
   // `||` on purpose: a finalizer that has started but not streamed yet keeps showing the translator's text.
   Array.from({ length: chunkCount }, (_, i) => preview?.finalize[i] || preview?.translate[i] || '')
 
-const emptyProgress = (lang: string, region?: string): TargetProgress => ({
+export const emptyProgress = (lang: string, region?: string): TargetProgress => ({
   lang,
   ...(region ? { region } : {}),
   status: 'pending',
@@ -107,8 +111,8 @@ const touchStage = (
 }
 
 /** Called by the workspace before the engine starts so the board can draw the planned stages. */
-export const beginRun = (difficulty: Difficulty | 'auto'): void => {
-  $run.set({ ...idleRun, difficulty })
+export const beginRun = (job: TranslationJob): void => {
+  $run.set({ ...idleRun, job, difficulty: job.difficulty })
   $previews.set({})
 }
 
@@ -148,6 +152,7 @@ export function applyProgress(event: ProgressEvent): void {
       $run.set({
         status: 'running',
         jobId: event.jobId,
+        job: $run.get().job,
         difficulty: $run.get().difficulty,
         brief: null,
         stages: {},

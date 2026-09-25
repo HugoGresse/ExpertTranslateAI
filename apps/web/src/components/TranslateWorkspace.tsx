@@ -19,6 +19,7 @@ import { LANGUAGES, languageName } from '../data/languages'
 import { useModels } from '../hooks/useModels'
 import { useRepo } from '../hooks/useRepo'
 import { pickOneOf } from '../lib/guards'
+import { restoreRun } from '../stores/restoreRun'
 import { $run, applyProgress, beginRun, idleRun } from '../stores/run'
 import {
   $onboardingDone,
@@ -67,6 +68,37 @@ const QUALITY: Array<{ value: (typeof DIFFICULTY_OPTIONS)[number]; label: string
   ]
 
 const shortModel = (id: string): string => (id.split('/')[1] ?? id).replace(/-\d{4,}$/, '')
+
+const materialsOf = (
+  o: Pick<Selection, 'contextSourceIds' | 'glossaryScopeIds' | 'guidelineSetIds' | 'useMemory'>,
+): number =>
+  // Jobs stored before an option existed lack its array.
+  (o.contextSourceIds?.length ?? 0) +
+  (o.glossaryScopeIds?.length ?? 0) +
+  (o.guidelineSetIds?.length ?? 0) +
+  (o.useMemory ? 1 : 0)
+
+const clearJobParam = (): void => {
+  if (new URLSearchParams(window.location.search).has('job'))
+    window.history.replaceState(null, '', window.location.pathname)
+}
+
+/** `/?job=<id>` opens a stored job from history in the same view a live run ends on. */
+async function openStoredJob(): Promise<void> {
+  const params = new URLSearchParams(window.location.search)
+  const id = params.get('job')
+  const before = $run.get()
+  if (!id || before.status === 'running') return
+  const [job, results] = await Promise.all([storage.jobs.get(id), storage.results.listByJob(id)])
+  if (!job) {
+    logger.warn('history.jobMissing', { jobId: id })
+    return
+  }
+  // A run started while storage was loading wins over the stored one.
+  if ($run.get() !== before) return
+  $run.set(restoreRun(job, results))
+  logger.info('history.opened', { jobId: id, targets: job.targets.length })
+}
 
 interface Selection {
   contextSourceIds: string[]
@@ -148,6 +180,11 @@ export const TranslateWorkspace: FC = () => {
   const [styleOpen, setStyleOpen] = useState(false)
   const [addContext, setAddContext] = useState(false)
   const [editing, setEditing] = useState(false)
+  useEffect(() => {
+    openStoredJob().catch((error: unknown) =>
+      logger.error('history.openFailed', { error: String(error) }),
+    )
+  }, [])
   const selection = useMemo<Selection>(
     () => ({
       contextSourceIds: selectedContextIds.filter((id) =>
@@ -208,7 +245,8 @@ export const TranslateWorkspace: FC = () => {
     if (!engineFactory) return
     const job = buildJob(source, settings, targets, selection)
     controller.current = new AbortController()
-    beginRun(job.difficulty)
+    clearJobParam()
+    beginRun(job)
     setEditing(false)
     logger.info('run.start', {
       jobId: job.id,
@@ -249,13 +287,13 @@ export const TranslateWorkspace: FC = () => {
   ].filter(Boolean)
   const wordCount = source.trim() ? source.trim().split(/\s+/).length : 0
   const focused = run.status !== 'idle' && !editing
-  const materialsCount =
-    selection.contextSourceIds.length +
-    selection.glossaryScopeIds.length +
-    selection.guidelineSetIds.length +
-    (useMemory ? 1 : 0)
+  // The focused header describes the run on screen, not the recipe being edited.
+  const runSource = run.job?.sourceText ?? source
+  const runWords = runSource.trim() ? runSource.trim().split(/\s+/).length : 0
+  const runTargets = run.job?.targets ?? targets
+  const materialsCount = materialsOf(run.job?.options ?? selection)
   const firstLine =
-    source
+    runSource
       .trim()
       .split('\n')[0]
       ?.replace(/^#+\s*/, '') ?? ''
@@ -287,14 +325,24 @@ export const TranslateWorkspace: FC = () => {
             {firstLine || 'Untitled text'}
           </span>
           <span className="text-body">
-            {wordCount} words → {targets.map((t) => languageName(t.lang)).join(', ')}
+            {runWords} words → {runTargets.map((t) => languageName(t.lang)).join(', ')}
           </span>
           <span className="text-muted">
             {QUALITY.find((q) => q.value === run.difficulty)?.label ?? run.difficulty} ·{' '}
             {materialsCount} material{materialsCount === 1 ? '' : 's'}
           </span>
           <span className="ml-auto flex gap-2">
-            <Button size="sm" onClick={() => setEditing(true)}>
+            <Button
+              size="sm"
+              onClick={() => {
+                // A run opened from history puts its own recipe in the editor only when asked.
+                if (!busy && run.job && new URLSearchParams(window.location.search).has('job')) {
+                  $sourceDraft.set(run.job.sourceText)
+                  $targets.set(run.job.targets)
+                }
+                setEditing(true)
+              }}
+            >
               {busy ? 'Show source' : 'Edit and rerun'}
             </Button>
             {!busy ? (
@@ -305,6 +353,7 @@ export const TranslateWorkspace: FC = () => {
                   $run.set(idleRun)
                   $sourceDraft.set('')
                   setEditing(false)
+                  clearJobParam()
                 }}
               >
                 New translation
@@ -612,9 +661,13 @@ export const TranslateWorkspace: FC = () => {
             board={{
               stages: run.stages,
               difficulty: run.difficulty,
-              models: resolved,
-              suggestGlossary: settings.suggestGlossary === 'true',
-              backTranslate: settings.backTranslate === 'true',
+              models: run.job?.models ?? resolved,
+              suggestGlossary: run.job
+                ? run.job.options.suggestGlossary
+                : settings.suggestGlossary === 'true',
+              backTranslate: run.job
+                ? run.job.options.backTranslate
+                : settings.backTranslate === 'true',
             }}
           />
           {run.cost ? (

@@ -116,6 +116,8 @@ const FinalText: FC<{ result: TargetResult }> = ({ result }) => {
     try {
       for (const e of entries) await storage.tm.put(e)
       await markHumanEdited(result, text)
+      // Keep the edit on the stored result so reopening the job from history shows it.
+      await storage.results.put({ ...result, finalText: text })
       logger.info('memory.learned', { lang: result.lang, count: entries.length })
       setSaved(
         entries.length === 0
@@ -175,8 +177,8 @@ const FinalText: FC<{ result: TargetResult }> = ({ result }) => {
         </p>
       </div>
       <div className="min-h-0 overflow-y-auto pr-1 [max-height:var(--result-h)]">
-        <GlossarySuggestionsCard key={result.targetKey} result={result} />
         {result.score ? <ScoreCard score={result.score} /> : null}
+        <GlossarySuggestionsCard key={result.targetKey} result={result} />
         <GuidelineReport violations={result.guidelineReport} />
         <TerminologyReport violations={result.terminologyReport} hits={result.memoryHits} />
         {result.backTranslation ? (
@@ -264,7 +266,12 @@ export const ResultPanel: FC<ResultPanelProps> = ({ targets, board, trailing, ab
       </div>
       {above ? <div className="pt-3">{above}</div> : null}
       <div className="flex flex-col gap-4 pt-4">
-        <PipelineBoard targetKey={active} progress={current} {...board} />
+        <PipelineBoard
+          targetKey={active}
+          progress={current}
+          {...board}
+          models={current.result?.models ?? board.models}
+        />
         {current.status === 'failed' ? (
           <p className="text-sm text-danger">{current.error}</p>
         ) : null}

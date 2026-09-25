@@ -94,6 +94,6 @@ test('a configured server runs the job without a local key and history keeps the
 
   await page.goto('/history')
   await expect(page.getByText('Bonjour du serveur')).toHaveCount(0)
-  await page.getByRole('button', { name: 'Open' }).click()
-  await expect(page.getByText('Bonjour du serveur')).toBeVisible()
+  await page.getByRole('link', { name: 'Open' }).click()
+  await expect(page.locator('textarea').nth(1)).toHaveValue(/Bonjour du serveur/)
 })

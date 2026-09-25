@@ -25,6 +25,9 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   loading?: boolean
 }
 
+export const buttonClass = (variant: Variant = 'secondary', size: Size = 'md'): string =>
+  `inline-flex items-center justify-center gap-2 whitespace-nowrap font-semibold transition disabled:cursor-not-allowed ${VARIANTS[variant]} ${SIZES[size]}`
+
 export const Button: FC<ButtonProps> = ({
   variant = 'secondary',
   size = 'md',
@@ -38,7 +41,7 @@ export const Button: FC<ButtonProps> = ({
     type="button"
     aria-busy={loading || undefined}
     disabled={disabled || loading}
-    className={`inline-flex items-center justify-center gap-2 whitespace-nowrap font-semibold transition disabled:cursor-not-allowed ${VARIANTS[variant]} ${SIZES[size]} ${className}`}
+    className={`${buttonClass(variant, size)} ${className}`}
     {...rest}
   >
     {loading ? <Spinner className="h-4 w-4 border-current border-t-transparent" /> : null}
