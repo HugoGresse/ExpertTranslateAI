@@ -1,7 +1,11 @@
 import { expect, type Page, test } from '@playwright/test'
 import { sse } from './helpers'
 
-const mockOpenRouter = async (page: Page): Promise<string[]> => {
+const mockOpenRouter = async (
+  page: Page,
+  /** While set, calls for this language answer 402 like an account out of credit. */
+  outOfCredit: { lang: string | null } = { lang: null },
+): Promise<string[]> => {
   const seenModels: string[] = []
   await page.route('https://openrouter.ai/api/v1/models', (route) =>
     route.fulfill({
@@ -25,6 +29,11 @@ const mockOpenRouter = async (page: Page): Promise<string[]> => {
     seenModels.push(body.model)
     const system = body.messages[0]?.content ?? ''
     const lang = system.includes('to fr') ? 'fr' : 'es'
+    if (lang === outOfCredit.lang)
+      return route.fulfill({
+        status: 402,
+        json: { error: { message: 'Insufficient credits', code: 402 } },
+      })
     const user = body.messages[1]?.content ?? ''
     const tokens = user.match(/⟦PH\d+⟧/g) ?? []
     return route.fulfill({
@@ -76,4 +85,41 @@ test('translates into two languages with placeholders restored and stores histor
     'Bonjour fr {{name}} https://example.com',
   )
   await expect(page.getByText(/Total: 2 calls/)).toBeVisible()
+})
+
+test('retry re-runs only the target that ran out of credit and history keeps both', async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('eta.openrouter.key', 'sk-or-e2e')
+    localStorage.setItem('eta.settings.autoEscalate', 'false')
+    localStorage.setItem('eta.settings.translatorModel', 'test/model')
+    localStorage.setItem('eta.settings.difficulty', 'simple')
+    localStorage.setItem(
+      'eta.targets',
+      JSON.stringify([{ lang: 'fr' }, { lang: 'es', region: 'Mexico' }]),
+    )
+  })
+  const outOfCredit: { lang: string | null } = { lang: 'es' }
+  const seenModels = await mockOpenRouter(page, outOfCredit)
+
+  await page.goto('/')
+  await page.getByPlaceholder('Paste text or Markdown to translate…').fill('Hello')
+  await page.getByRole('button', { name: 'Translate' }).click()
+  const retry = page.getByRole('button', { name: 'Retry 1 unfinished' })
+  await expect(retry).toBeVisible()
+  await page.getByRole('tab', { name: /Spanish/ }).click()
+  await expect(page.getByText(/Insufficient credits|402/).first()).toBeVisible()
+
+  outOfCredit.lang = null
+  const before = seenModels.length
+  await retry.click()
+  await expect(page.locator('textarea').nth(1)).toHaveValue('Bonjour es')
+  await expect(retry).toHaveCount(0)
+  expect(seenModels.length - before).toBe(1)
+  await page.getByRole('tab', { name: /French/ }).click()
+  await expect(page.locator('textarea').nth(1)).toHaveValue('Bonjour fr')
+
+  await page.goto('/history')
+  await expect(page.getByText('French, Spanish (Mexico) · test/model · done')).toBeVisible()
 })
