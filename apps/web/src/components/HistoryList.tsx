@@ -1,10 +1,10 @@
 import type { TranslationJob } from '@experttranslate/core'
-import { type FC, useCallback, useEffect, useState } from 'react'
+import { type FC, useEffect, useState } from 'react'
 import { storage } from '../adapters/dexieStorage'
 import { logger } from '../adapters/logger'
 import { languageLabel } from '../data/languages'
 import { jobCost } from '../stores/restoreRun'
-import { Button, basePath, buttonClass, Card, formatUsd } from './ui'
+import { Button, basePath, buttonClass, Card, formatUsd, Spinner } from './ui'
 
 const JobRow: FC<{ job: TranslationJob; cost: number | null; onDelete: (id: string) => void }> = ({
   job,
@@ -35,37 +35,72 @@ const JobRow: FC<{ job: TranslationJob; cost: number | null; onDelete: (id: stri
         </Button>
       </div>
     </div>
-    <p className="mt-1 line-clamp-2 text-xs text-neutral-500">{job.sourceText}</p>
+    <p className="mt-1 line-clamp-2 text-xs text-neutral-500">{job.sourceText.slice(0, 400)}</p>
   </li>
 )
 
+/** Jobs from before the cost was stored on the job: add it up once from the results, then keep it. */
+async function backfillCost(job: TranslationJob): Promise<number> {
+  const cost = jobCost(await storage.results.listByJob(job.id))
+  if (job.status !== 'running' && job.status !== 'queued')
+    await storage.jobs
+      .put({ ...job, cost })
+      .catch((error: unknown) =>
+        logger.warn('history.costBackfillFailed', { jobId: job.id, error: String(error) }),
+      )
+  return cost.usd
+}
+
 export const HistoryList: FC = () => {
-  const [jobs, setJobs] = useState<TranslationJob[]>([])
+  const [jobs, setJobs] = useState<TranslationJob[] | null>(null)
   const [costs, setCosts] = useState<Record<string, number>>({})
 
-  const reload = useCallback(async (): Promise<void> => {
-    const list = (await storage.jobs.list()).sort((a, b) => b.createdAt - a.createdAt)
-    setJobs(list)
-    const entries = await Promise.all(
-      list.map(async (job) => {
-        const results = await storage.results.listByJob(job.id)
-        return [job.id, jobCost(results).usd] as const
-      }),
-    )
-    setCosts(Object.fromEntries(entries))
-  }, [])
-  const total = jobs.reduce((acc, j) => acc + (costs[j.id] ?? 0), 0)
-
   useEffect(() => {
-    void reload()
-  }, [reload])
+    let live = true
+    void (async () => {
+      const started = performance.now()
+      // Only the jobs table: results carry full traces and are read just for legacy rows below.
+      const list = await storage.jobs.list()
+      if (!live) return
+      setJobs(list)
+      setCosts(
+        Object.fromEntries(list.flatMap((j) => (j.cost ? [[j.id, j.cost.usd] as const] : []))),
+      )
+      logger.debug('history.loaded', {
+        jobs: list.length,
+        ms: Math.round(performance.now() - started),
+      })
+      for (const job of list.filter((j) => !j.cost)) {
+        const usd = await backfillCost(job)
+        if (!live) return
+        setCosts((c) => ({ ...c, [job.id]: usd }))
+      }
+    })().catch((error: unknown) => {
+      logger.error('history.loadFailed', { error: String(error) })
+      if (live) setJobs([])
+    })
+    return () => {
+      live = false
+    }
+  }, [])
+
+  const total = (jobs ?? []).reduce((acc, j) => acc + (costs[j.id] ?? 0), 0)
 
   const remove = async (id: string): Promise<void> => {
     await storage.results.deleteByJob(id)
     await storage.jobs.delete(id)
     logger.info('history.deleted', { jobId: id })
-    await reload()
+    setJobs((list) => list?.filter((j) => j.id !== id) ?? null)
   }
+
+  if (jobs === null)
+    return (
+      <Card title="History">
+        <p className="flex items-center gap-2 text-sm text-muted" aria-live="polite">
+          <Spinner /> Loading history…
+        </p>
+      </Card>
+    )
 
   return (
     <Card title="History">

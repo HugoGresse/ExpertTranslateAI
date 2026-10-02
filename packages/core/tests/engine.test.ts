@@ -31,6 +31,13 @@ describe('engine.run', () => {
     )
     expect(events.at(-1)?.type).toBe('job-done')
     expect((await storage.jobs.get('job-1'))?.status).toBe('done')
+    // The job keeps its total so listings need not load every result.
+    expect((await storage.jobs.get('job-1'))?.cost).toEqual({
+      usd: 0.002,
+      calls: 2,
+      tokensIn: 20,
+      tokensOut: 10,
+    })
     expect(await storage.results.listByJob('job-1')).toHaveLength(2)
     expect(llm.calls).toHaveLength(2)
     expect(llm.calls[1]?.request.messages[0]?.content).toContain('es as spoken in Mexico')

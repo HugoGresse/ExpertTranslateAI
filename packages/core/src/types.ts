@@ -339,6 +339,8 @@ export interface TranslationJob {
   models: RoleModels
   options: JobOptions
   status: JobStatus
+  /** Total spend, written when the job ends so listings never load every result to add it up. */
+  cost?: CostSummary
 }
 
 export interface Usage {

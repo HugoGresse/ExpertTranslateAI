@@ -63,6 +63,31 @@ h3 {
   letter-spacing: -0.01em;
 }
 
+/* Tailwind's preflight leaves buttons on the default arrow; everything clickable gets a hand. */
+@layer base {
+  button,
+  [role="button"],
+  [role="tab"],
+  [role="option"],
+  [type="button"],
+  [type="submit"],
+  [type="reset"],
+  [type="checkbox"],
+  [type="radio"],
+  [type="file"],
+  [type="file"]::file-selector-button,
+  select,
+  summary,
+  label:has(> input[type="checkbox"], > input[type="radio"], > input[type="file"]) {
+    cursor: pointer;
+  }
+
+  :disabled,
+  [aria-disabled="true"] {
+    cursor: not-allowed;
+  }
+}
+
 :focus-visible {
   outline: 2px solid var(--color-primary);
   outline-offset: 2px;

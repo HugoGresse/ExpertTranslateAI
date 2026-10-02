@@ -149,7 +149,11 @@ export function createEngine(ports: EnginePorts): Engine {
           prepared = await prepare()
         } catch (error) {
           ports.logger.error('job.prepareFailed', { error: errorMessage(error) })
-          await ports.storage.jobs.put({ ...job, status: isAbort(error) ? 'cancelled' : 'failed' })
+          await ports.storage.jobs.put({
+            ...job,
+            status: isAbort(error) ? 'cancelled' : 'failed',
+            cost: totalCost(),
+          })
           for (const t of job.targets)
             events.emit({
               type: 'target-failed',
@@ -213,7 +217,7 @@ export function createEngine(ports: EnginePorts): Engine {
           : done.length === job.targets.length
             ? 'done'
             : 'failed'
-        await ports.storage.jobs.put({ ...job, status })
+        await ports.storage.jobs.put({ ...job, status, cost: totalCost() })
         events.emit({ type: 'job-done', jobId: job.id, cost: totalCost() })
       }
 

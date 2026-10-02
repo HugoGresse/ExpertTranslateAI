@@ -99,6 +99,7 @@ export function createRemoteEngine(opts: RemoteEngineOptions): RemoteEngine {
     const body: RemoteJobRequest = { job, materials: await collectMaterials(opts.storage, job) }
     await opts.storage.jobs.put({ ...job, status: 'running' })
     let status: TranslationJob['status'] = 'failed'
+    let cost: TranslationJob['cost']
     let sawTargetFailure = false
     let finished = false
     let events = 0
@@ -136,6 +137,7 @@ export function createRemoteEngine(opts: RemoteEngineOptions): RemoteEngine {
         if (parsed.type === 'target-failed') sawTargetFailure = true
         if (parsed.type === 'job-done') {
           finished = true
+          cost = parsed.cost
           status = sawTargetFailure ? 'failed' : 'done'
         }
         yield parsed
@@ -145,9 +147,11 @@ export function createRemoteEngine(opts: RemoteEngineOptions): RemoteEngine {
     } finally {
       if (o?.signal?.aborted) status = 'cancelled'
       opts.logger.debug('remote.streamEnd', { jobId: job.id, status, events, finished })
-      await opts.storage.jobs.put({ ...job, status }).catch((error: unknown) => {
-        opts.logger.warn('remote.jobPutFailed', { error: String(error) })
-      })
+      await opts.storage.jobs
+        .put({ ...job, status, ...(cost ? { cost } : {}) })
+        .catch((error: unknown) => {
+          opts.logger.warn('remote.jobPutFailed', { error: String(error) })
+        })
     }
   }
 

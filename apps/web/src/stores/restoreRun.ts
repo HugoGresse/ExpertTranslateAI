@@ -60,7 +60,8 @@ export function restoreRun(job: TranslationJob, results: TargetResult[]): RunSta
   }
   if (results[0]) record('*', splitTrace(results[0]).job)
   for (const r of results) record(r.targetKey, splitTrace(r).own)
-  const cost = jobCost(results)
+  // The engine's own total also counts calls made by targets that later failed.
+  const cost = job.cost ?? jobCost(results)
   const status = STATUS[job.status]
   const missing =
     status === 'cancelled' ? 'Cancelled before this target finished.' : 'No result was stored.'

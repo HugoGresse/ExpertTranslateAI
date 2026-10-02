@@ -268,9 +268,14 @@ export const TranslateWorkspace: FC = () => {
       if (controller.current?.signal.aborted) $run.setKey('status', 'cancelled')
       controller.current = null
       // The engine stored the job with only the retried targets; put the full recipe back.
+      const merged = $run.get()
       if (carry)
         await storage.jobs
-          .put({ ...carry.job, status: mergedJobStatus($run.get()) })
+          .put({
+            ...carry.job,
+            status: mergedJobStatus(merged),
+            ...(merged.cost ? { cost: merged.cost } : {}),
+          })
           .catch((error: unknown) =>
             logger.error('run.retryJobPutFailed', { jobId: job.id, error: String(error) }),
           )
