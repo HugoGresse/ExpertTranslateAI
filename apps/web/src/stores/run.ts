@@ -5,6 +5,7 @@ import {
   type ProgressEvent,
   STAGE_LABELS,
   type StageName,
+  sumCosts,
   type TargetResult,
   type TranslationJob,
   targetKey,
@@ -110,9 +111,44 @@ const touchStage = (
   })
 }
 
-/** Called by the workspace before the engine starts so the board can draw the planned stages. */
-export const beginRun = (job: TranslationJob): void => {
-  $run.set({ ...idleRun, job, difficulty: job.difficulty })
+/** What a retry keeps from the run it continues: the finished targets and what they cost. */
+export interface RunCarry {
+  /** The full job; the engine only runs the targets that still need work. */
+  job: TranslationJob
+  targets: RunState['targets']
+  stages: RunState['stages']
+  brief: Brief | null
+  live: CostSummary
+}
+
+let carried: RunCarry | null = null
+
+/**
+ * Called by the workspace before the engine starts so the board can draw the planned stages. A
+ * retry passes what it carries over, so finished targets stay on screen beside the retried ones.
+ */
+export const beginRun = (job: TranslationJob, carry: RunCarry | null = null): void => {
+  carried = carry
+  $run.set({
+    ...idleRun,
+    job: carry?.job ?? job,
+    difficulty: job.difficulty,
+    ...(carry
+      ? {
+          // Not `idle`: the result card stays mounted, so the open tab survives the retry.
+          status: 'running' as const,
+          // Retried targets stay listed (as pending) so the open tab does not jump away.
+          targets: {
+            ...carry.targets,
+            ...Object.fromEntries(
+              job.targets.map((t) => [targetKey(t), emptyProgress(t.lang, t.region)]),
+            ),
+          },
+          stages: carry.stages,
+          brief: carry.brief,
+        }
+      : {}),
+  })
   $previews.set({})
 }
 
@@ -154,14 +190,17 @@ export function applyProgress(event: ProgressEvent): void {
         jobId: event.jobId,
         job: $run.get().job,
         difficulty: $run.get().difficulty,
-        brief: null,
-        stages: {},
-        live: { usd: 0, calls: 0, tokensIn: 0, tokensOut: 0 },
+        brief: carried?.brief ?? null,
+        stages: carried?.stages ?? {},
+        live: carried?.live ?? { usd: 0, calls: 0, tokensIn: 0, tokensOut: 0 },
         cost: null,
         error: null,
-        targets: Object.fromEntries(
-          event.targets.map((t) => [targetKey(t), emptyProgress(t.lang, t.region)]),
-        ),
+        targets: {
+          ...carried?.targets,
+          ...Object.fromEntries(
+            event.targets.map((t) => [targetKey(t), emptyProgress(t.lang, t.region)]),
+          ),
+        },
       })
       return
     case 'brief-done':
@@ -236,7 +275,7 @@ export function applyProgress(event: ProgressEvent): void {
       patchTarget(event.targetKey, { status: 'failed', error: event.error, activity: 'failed' })
       return
     case 'job-done':
-      $run.setKey('cost', event.cost)
+      $run.setKey('cost', carried ? sumCosts([carried.live, event.cost]) : event.cost)
       $run.setKey('status', 'done')
       return
   }

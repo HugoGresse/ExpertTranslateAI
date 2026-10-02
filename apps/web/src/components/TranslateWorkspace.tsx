@@ -20,7 +20,8 @@ import { useModels } from '../hooks/useModels'
 import { useRepo } from '../hooks/useRepo'
 import { pickOneOf } from '../lib/guards'
 import { restoreRun } from '../stores/restoreRun'
-import { $run, applyProgress, beginRun, idleRun } from '../stores/run'
+import { canRetry, mergedJobStatus, planRetry } from '../stores/retry'
+import { $run, applyProgress, beginRun, idleRun, type RunCarry } from '../stores/run'
 import {
   $onboardingDone,
   $promptOverrides,
@@ -241,16 +242,15 @@ export const TranslateWorkspace: FC = () => {
     return () => clearTimeout(handle)
   }, [engineFactory, source, targets, models, settings, selection, contexts.items])
 
-  const start = async (): Promise<void> => {
+  const execute = async (job: TranslationJob, carry: RunCarry | null = null): Promise<void> => {
     if (!engineFactory) return
-    const job = buildJob(source, settings, targets, selection)
     controller.current = new AbortController()
-    clearJobParam()
-    beginRun(job)
+    beginRun(job, carry)
     setEditing(false)
-    logger.info('run.start', {
+    logger.info(carry ? 'run.retry' : 'run.start', {
       jobId: job.id,
       targets: job.targets.length,
+      kept: carry ? Object.keys(carry.targets).length : 0,
       model: job.models.translatorA,
     })
     try {
@@ -267,12 +267,32 @@ export const TranslateWorkspace: FC = () => {
     } finally {
       if (controller.current?.signal.aborted) $run.setKey('status', 'cancelled')
       controller.current = null
+      // The engine stored the job with only the retried targets; put the full recipe back.
+      if (carry)
+        await storage.jobs
+          .put({ ...carry.job, status: mergedJobStatus($run.get()) })
+          .catch((error: unknown) =>
+            logger.error('run.retryJobPutFailed', { jobId: job.id, error: String(error) }),
+          )
     }
+  }
+
+  const start = (): Promise<void> => {
+    clearJobParam()
+    return execute(buildJob(source, settings, targets, selection))
+  }
+
+  const retry = (): void => {
+    const plan = planRetry($run.get())
+    if (plan) void execute(plan.job, plan.carry)
   }
 
   const cancel = (): void => controller.current?.abort()
 
   const busy = run.status === 'running'
+  const unfinished = Object.values(run.targets).filter((t) => t.status !== 'done').length
+  const retryLabel =
+    unfinished === Object.keys(run.targets).length ? 'Retry' : `Retry ${unfinished} unfinished`
   const canRun = engineFactory !== null && !busy && source.trim().length > 0 && targets.length > 0
   const resolved = roleModels(settings)
   const translators = [
@@ -648,6 +668,11 @@ export const TranslateWorkspace: FC = () => {
                 {busy ? (
                   <Button variant="danger" size="sm" onClick={cancel}>
                     Cancel
+                  </Button>
+                ) : null}
+                {canRetry(run) && engineFactory ? (
+                  <Button variant="primary" size="sm" onClick={retry}>
+                    {retryLabel}
                   </Button>
                 ) : null}
                 {!busy && editing ? (

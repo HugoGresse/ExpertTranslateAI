@@ -80,10 +80,14 @@ export const ModelPicker: FC<ModelPickerProps> = ({
 }) => {
   const [open, setOpen] = useState(false)
   const [highlight, setHighlight] = useState(-1)
+  // Opening a filled picker browses the whole catalog; it filters only once the user types.
+  const [typed, setTyped] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  /** Set while focus returns to the input after a pick, so that focus does not reopen the list. */
+  const refocusing = useRef(false)
   const listId = useId()
-  const deferred = useDeferredValue(value)
+  const deferred = useDeferredValue(typed ? value : '')
   const q = deferred.trim().toLowerCase()
   const { rows, options } = useMemo(() => buildRows(models, q), [models, q])
   const matched = useMemo(() => models.find((m) => m.id === value) ?? null, [models, value])
@@ -100,16 +104,23 @@ export const ModelPicker: FC<ModelPickerProps> = ({
   // biome-ignore lint/correctness/useExhaustiveDependencies: the highlight resets whenever the visible options change
   useEffect(() => setHighlight(-1), [q, open])
 
+  const openList = (): void => {
+    setTyped(false)
+    setOpen(true)
+  }
+
   const choose = (m: ModelInfo): void => {
     onChange(m.id)
     setOpen(false)
+    refocusing.current = true
     inputRef.current?.focus()
+    refocusing.current = false
   }
 
   const onKeyDown = (e: KeyboardEvent<HTMLInputElement>): void => {
     if (e.key === 'ArrowDown') {
       e.preventDefault()
-      if (!open) setOpen(true)
+      if (!open) openList()
       else setHighlight((h) => Math.min(options.length - 1, h + 1))
     } else if (e.key === 'ArrowUp') {
       e.preventDefault()
@@ -147,9 +158,12 @@ export const ModelPicker: FC<ModelPickerProps> = ({
           value={value}
           onChange={(e) => {
             onChange(e.target.value)
+            setTyped(true)
             if (!open) setOpen(true)
           }}
-          onFocus={() => setOpen(true)}
+          onFocus={() => {
+            if (!refocusing.current) openList()
+          }}
           onKeyDown={onKeyDown}
         />
         <button
@@ -158,7 +172,8 @@ export const ModelPicker: FC<ModelPickerProps> = ({
           aria-label={open ? 'Close model list' : 'Open model list'}
           className="absolute inset-y-0 right-0 flex items-center px-2.5 text-muted"
           onClick={() => {
-            setOpen((o) => !o)
+            if (open) setOpen(false)
+            else openList()
             inputRef.current?.focus()
           }}
         >

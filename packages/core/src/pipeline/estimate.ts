@@ -1,3 +1,4 @@
+import { sourceTokensUpTo } from '../context/condense.ts'
 import { findPricing, usageCost } from '../llm/pricing.ts'
 import { chunkText } from '../text/chunk.ts'
 import { countTokens } from '../text/tokens.ts'
@@ -28,7 +29,15 @@ export function estimateJob(
     (job.options.suggestGlossary && plan.finalize ? job.targets.length : 0)
   const contextTokens = sources
     .filter((s) => isRelevantSource(s, job) && job.options.contextSourceIds.includes(s.id))
-    .reduce((acc, s) => acc + Math.min(countTokens(s.rawText), job.options.contextTokenBudget), 0)
+    .reduce(
+      (acc, s) =>
+        acc +
+        Math.min(
+          sourceTokensUpTo(s, job.options.contextTokenBudget),
+          job.options.contextTokenBudget,
+        ),
+      0,
+    )
   const pricing = findPricing(models, job.models.translatorA)
   const promptPerCall = sourceTokens + contextTokens + 400
   const outputPerCall = sourceTokens * 1.2

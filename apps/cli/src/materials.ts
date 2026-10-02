@@ -3,6 +3,7 @@ import { basename } from 'node:path'
 import {
   type ContextSource,
   contentHash,
+  crawlLlmsTxt,
   extractRules,
   type FetchPort,
   type GuidelineSet,
@@ -11,6 +12,7 @@ import {
   type LoggerPort,
   type ReasoningEffort,
   type StoragePort,
+  sourceHashInput,
 } from '@experttranslate/core'
 
 const isUrl = (spec: string): boolean => /^https?:\/\//i.test(spec)
@@ -41,7 +43,22 @@ export async function loadContexts(specs: string[], ports: MaterialPorts): Promi
   const ids: string[] = []
   for (const spec of specs) {
     const rawText = await readSpec(spec, ports)
-    const hash = await contentHash(rawText)
+    const kind = isLlmsTxt(rawText, spec)
+      ? 'llms-txt'
+      : isUrl(spec)
+        ? 'markdown-url'
+        : 'markdown-file'
+    // An llms.txt brings the pages it links to; they are part of its identity.
+    const linked =
+      kind === 'llms-txt'
+        ? await crawlLlmsTxt(
+            rawText,
+            ports.fetch,
+            ports.logger,
+            isUrl(spec) ? { baseUrl: spec } : { sourceName: basename(spec) },
+          )
+        : []
+    const hash = await contentHash(sourceHashInput(rawText, linked))
     const existing = byHash.get(hash)
     if (existing) {
       ports.logger.debug('context.reused', { spec, id: existing })
@@ -51,9 +68,10 @@ export async function loadContexts(specs: string[], ports: MaterialPorts): Promi
     const source: ContextSource = {
       id: ports.makeId(),
       name: isUrl(spec) ? spec : basename(spec),
-      kind: isLlmsTxt(rawText, spec) ? 'llms-txt' : isUrl(spec) ? 'markdown-url' : 'markdown-file',
+      kind,
       ...(isUrl(spec) ? { url: spec, fetchedAt: ports.now() } : {}),
       rawText,
+      ...(linked.length > 0 ? { linked } : {}),
       contentHash: hash,
       enabled: true,
       createdAt: ports.now(),

@@ -39,5 +39,7 @@ test('settings page accepts a pasted key and lists models from a mocked catalog'
     .getByRole('option', { name: /test\/model/ })
     .first()
     .click()
-  await expect(page.getByText(/Test Model · /)).toBeVisible()
+  await expect(page.getByRole('listbox', { name: 'Models' })).toHaveCount(0)
+  await expect(page.locator('input[role="combobox"]').first()).toHaveValue('test/model')
+  await expect(page.getByText(/^Test Model/).first()).toBeVisible()
 })

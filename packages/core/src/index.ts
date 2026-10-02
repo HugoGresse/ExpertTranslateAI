@@ -1,4 +1,12 @@
 export { condenseSource, hasFreshDigest, needsCondense, sourceText } from './context/condense.ts'
+export {
+  CRAWL_DEFAULTS,
+  type CrawlOptions,
+  crawlLlmsTxt,
+  isFullLlmsTxt,
+  linkedTextUrls,
+  sourceHashInput,
+} from './context/crawl.ts'
 export { contentHash } from './context/hash.ts'
 export { digestLlmsTxt, isLlmsTxt, type LlmsTxt, parseLlmsTxt } from './context/llmsTxt.ts'
 export {

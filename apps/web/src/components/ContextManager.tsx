@@ -1,4 +1,4 @@
-import { type ContextSource, contentHash, countTokens, needsCondense } from '@experttranslate/core'
+import { type ContextSource, countTokens, needsCondense, sourceText } from '@experttranslate/core'
 import { useStore } from '@nanostores/react'
 import { type FC, useMemo, useState } from 'react'
 import { browserFetch } from '../adapters/browserFetch'
@@ -6,7 +6,7 @@ import { storage } from '../adapters/dexieStorage'
 import { logger } from '../adapters/logger'
 import { LANGUAGES, languageName } from '../data/languages'
 import { useRepo } from '../hooks/useRepo'
-import { type ContextInputMode, createContextSource } from '../lib/contextSources'
+import { type ContextInputMode, createContextSource, withLinkedPages } from '../lib/contextSources'
 import { TEXT_FILE_ACCEPT } from '../lib/files'
 import { normalizeUrl } from '../lib/url'
 import { $settings, numberSetting } from '../stores/settings'
@@ -127,7 +127,7 @@ const SourceRow: FC<{
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const tokens = useMemo(() => countTokens(source.rawText), [source.rawText])
+  const tokens = useMemo(() => countTokens(sourceText(source)), [source])
   // Compares the token count already computed above instead of tokenising the text a second time.
   const condense = source.kind === 'llms-txt' ? needsCondense(source, budget) : tokens > budget
   const digestFresh = source.condensed?.forHash === source.contentHash
@@ -139,8 +139,18 @@ const SourceRow: FC<{
     try {
       const url = normalizeUrl(source.url)
       const { body } = await browserFetch.text(url)
-      const hash = await contentHash(body)
-      await onSave({ ...source, url, rawText: body, contentHash: hash, fetchedAt: Date.now() })
+      // A refetch recrawls, so the previous pages must not survive when the new file links none.
+      const { linked: _stale, ...rest } = source
+      await onSave({
+        ...rest,
+        url,
+        rawText: body,
+        ...(await withLinkedPages(body, source.kind, {
+          baseUrl: url,
+          ...(source.linked ? { previous: source.linked } : {}),
+        })),
+        fetchedAt: Date.now(),
+      })
     } catch (e) {
       logger.warn('context.refetchFailed', { source: source.id, error: String(e) })
       setError(e instanceof Error ? e.message : String(e))
@@ -186,6 +196,9 @@ const SourceRow: FC<{
             ? `condensed to ${source.condensed?.tokenEstimate} tokens`
             : 'will be condensed on first run'
           : 'used as-is'}
+        {source.linked?.length
+          ? ` · ${source.linked.length} linked page${source.linked.length > 1 ? 's' : ''}`
+          : ''}
         {source.fetchedAt ? ` · fetched ${new Date(source.fetchedAt).toLocaleString()}` : ''}
       </p>
       {error ? <p className="mt-1 text-xs text-red-700">{error}</p> : null}
