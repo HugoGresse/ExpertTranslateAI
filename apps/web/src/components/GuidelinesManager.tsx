@@ -126,7 +126,7 @@ const SetEditor: FC<{
               <option value="">All languages</option>
               {LANGUAGES.map((l) => (
                 <option key={l.code} value={l.code}>
-                  {l.name}
+                  {languageName(l.code)}
                 </option>
               ))}
             </select>

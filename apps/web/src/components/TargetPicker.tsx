@@ -1,6 +1,6 @@
 import { type Target, targetKey } from '@experttranslate/core'
 import { type FC, useState } from 'react'
-import { LANGUAGES, languageLabel } from '../data/languages'
+import { LANGUAGES, languageLabel, languageName } from '../data/languages'
 import { Button, inputClass } from './ui'
 
 export interface TargetPickerProps {
@@ -54,7 +54,7 @@ export const TargetPicker: FC<TargetPickerProps> = ({ targets, onChange }) => {
         >
           {LANGUAGES.map((l) => (
             <option key={l.code} value={l.code}>
-              {l.name}
+              {languageName(l.code)}
             </option>
           ))}
         </select>

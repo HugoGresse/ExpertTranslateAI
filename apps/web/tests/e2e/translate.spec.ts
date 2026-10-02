@@ -78,7 +78,9 @@ test('translates into two languages with placeholders restored and stores histor
   expect(seenModels).toEqual(['test/model', 'test/model'])
 
   await page.goto('/history')
-  await expect(page.getByText('French, Spanish (Mexico) · test/model · done')).toBeVisible()
+  await expect(
+    page.getByText('French (FR), Spanish (ES, Mexico) · test/model · done'),
+  ).toBeVisible()
   await page.getByRole('link', { name: 'Open' }).click()
   await expect(page.getByRole('tab', { name: /Spanish/ })).toBeVisible()
   await expect(page.locator('textarea').nth(1)).toHaveValue(
@@ -121,5 +123,7 @@ test('retry re-runs only the target that ran out of credit and history keeps bot
   await expect(page.locator('textarea').nth(1)).toHaveValue('Bonjour fr')
 
   await page.goto('/history')
-  await expect(page.getByText('French, Spanish (Mexico) · test/model · done')).toBeVisible()
+  await expect(
+    page.getByText('French (FR), Spanish (ES, Mexico) · test/model · done'),
+  ).toBeVisible()
 })

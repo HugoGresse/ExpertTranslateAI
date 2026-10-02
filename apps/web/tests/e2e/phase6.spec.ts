@@ -33,10 +33,10 @@ test('same-language region targets get separate tabs, files load into the source
   )
   await page.getByRole('button', { name: 'Translate' }).click()
 
-  await expect(page.getByRole('tab', { name: /^French ✓/ })).toBeVisible()
-  await expect(page.getByRole('tab', { name: /French \(Canada\) ✓/ })).toBeVisible()
+  await expect(page.getByRole('tab', { name: /^French \(FR\) ✓/ })).toBeVisible()
+  await expect(page.getByRole('tab', { name: /French \(FR, Canada\) ✓/ })).toBeVisible()
   await expect(page.locator('textarea').nth(1)).toHaveValue('Bonjour le monde')
-  await page.getByRole('tab', { name: /French \(Canada\)/ }).click()
+  await page.getByRole('tab', { name: /French \(FR, Canada\)/ }).click()
   await expect(page.locator('textarea').nth(1)).toHaveValue('Allo le monde')
   await expect(page.locator('textarea').nth(1)).toHaveAttribute('dir', 'ltr')
 

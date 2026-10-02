@@ -73,7 +73,7 @@ const ScopeForm: FC<{ scopes: GlossaryScope[]; onSave: (s: GlossaryScope) => Pro
           <option value="">Any</option>
           {LANGUAGES.map((l) => (
             <option key={l.code} value={l.code}>
-              {l.name}
+              {languageName(l.code)}
             </option>
           ))}
         </select>
@@ -153,7 +153,7 @@ const EntryForm: FC<{
       >
         {LANGUAGES.map((l) => (
           <option key={l.code} value={l.code}>
-            {l.name}
+            {languageName(l.code)}
           </option>
         ))}
       </select>

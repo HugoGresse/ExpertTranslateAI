@@ -7,10 +7,11 @@ export const LANGUAGES: LanguageOption[] = [
   { code: 'en', name: 'English' },
   { code: 'fr', name: 'French' },
   { code: 'es', name: 'Spanish' },
+  { code: 'ca', name: 'Catalan' },
   { code: 'de', name: 'German' },
   { code: 'it', name: 'Italian' },
   { code: 'pt', name: 'Portuguese' },
-  { code: 'pt-BR', name: 'Portuguese (Brazil)' },
+  { code: 'pt-BR', name: 'Brazilian Portuguese' },
   { code: 'nl', name: 'Dutch' },
   { code: 'pl', name: 'Polish' },
   { code: 'sv', name: 'Swedish' },
@@ -27,8 +28,8 @@ export const LANGUAGES: LanguageOption[] = [
   { code: 'ar', name: 'Arabic' },
   { code: 'he', name: 'Hebrew' },
   { code: 'hi', name: 'Hindi' },
-  { code: 'zh-Hans', name: 'Chinese (Simplified)' },
-  { code: 'zh-Hant', name: 'Chinese (Traditional)' },
+  { code: 'zh-Hans', name: 'Simplified Chinese' },
+  { code: 'zh-Hant', name: 'Traditional Chinese' },
   { code: 'ja', name: 'Japanese' },
   { code: 'ko', name: 'Korean' },
   { code: 'vi', name: 'Vietnamese' },
@@ -41,8 +42,21 @@ export const RTL_LANGS = new Set(['ar', 'he', 'fa', 'ur'])
 export const textDirection = (code: string): 'rtl' | 'ltr' =>
   RTL_LANGS.has(code.split('-')[0] ?? code) ? 'rtl' : 'ltr'
 
-export const languageName = (code: string): string =>
-  LANGUAGES.find((l) => l.code === code)?.name ?? code
+/** The code as shown to people: `nl` → `NL`, `pt-BR` → `PT-BR`, `zh-Hans` keeps its script casing. */
+export const languageTag = (code: string): string =>
+  code
+    .split('-')
+    .map((part, i) => (i === 0 || part.length === 2 ? part.toUpperCase() : part))
+    .join('-')
 
+const baseName = (code: string): string => LANGUAGES.find((l) => l.code === code)?.name ?? code
+
+/** `Dutch (NL)`; an unknown code shows as itself. */
+export const languageName = (code: string): string => {
+  const name = baseName(code)
+  return name === code ? code : `${name} (${languageTag(code)})`
+}
+
+/** `Spanish (ES, Mexico)` for a target with a region, otherwise the same as `languageName`. */
 export const languageLabel = (code: string, region?: string): string =>
-  region ? `${languageName(code)} (${region})` : languageName(code)
+  region ? `${baseName(code)} (${languageTag(code)}, ${region})` : languageName(code)

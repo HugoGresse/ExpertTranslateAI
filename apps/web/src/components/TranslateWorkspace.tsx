@@ -15,7 +15,7 @@ import { storage } from '../adapters/dexieStorage'
 import { createEngineHandle } from '../adapters/engineFactory'
 import { $apiKey } from '../adapters/keyVault'
 import { logger } from '../adapters/logger'
-import { LANGUAGES, languageName } from '../data/languages'
+import { LANGUAGES, languageLabel, languageName } from '../data/languages'
 import { useModels } from '../hooks/useModels'
 import { useRepo } from '../hooks/useRepo'
 import { pickOneOf } from '../lib/guards'
@@ -345,7 +345,7 @@ export const TranslateWorkspace: FC = () => {
             {firstLine || 'Untitled text'}
           </span>
           <span className="text-body">
-            {runWords} words → {runTargets.map((t) => languageName(t.lang)).join(', ')}
+            {runWords} words → {runTargets.map((t) => languageLabel(t.lang, t.region)).join(', ')}
           </span>
           <span className="text-muted">
             {QUALITY.find((q) => q.value === run.difficulty)?.label ?? run.difficulty} ·{' '}
@@ -552,7 +552,7 @@ export const TranslateWorkspace: FC = () => {
                         <option value="auto">Auto-detect</option>
                         {LANGUAGES.map((l) => (
                           <option key={l.code} value={l.code}>
-                            {l.name}
+                            {languageName(l.code)}
                           </option>
                         ))}
                       </select>
