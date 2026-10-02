@@ -1,19 +1,27 @@
 version: 2
-updates:
-  - package-ecosystem: github-actions
-    directory: /
+
+# One pull request a month with every npm and GitHub Actions update; the
+# dependabot-automerge workflow merges it once every check on it is green.
+multi-ecosystem-groups:
+  monthly:
     schedule:
-      interval: weekly
+      interval: monthly
     labels:
       - dependencies
+
+updates:
   - package-ecosystem: npm
     directory: /
-    schedule:
-      interval: weekly
-    labels:
-      - dependencies
-    groups:
-      minor-and-patch:
+    multi-ecosystem-group: monthly
+    patterns:
+      - '*'
+    ignore:
+      # Types track the Node version in .node-version (22), not the latest Node.
+      - dependency-name: '@types/node'
         update-types:
-          - minor
-          - patch
+          - version-update:semver-major
+  - package-ecosystem: github-actions
+    directory: /
+    multi-ecosystem-group: monthly
+    patterns:
+      - '*'
