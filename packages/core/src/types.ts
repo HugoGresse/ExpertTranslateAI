@@ -247,12 +247,21 @@ export interface ContextDigest {
   forHash: string
 }
 
+/** A page an llms.txt links to, fetched alongside it. */
+export interface LinkedPage {
+  url: string
+  title: string
+  text: string
+}
+
 export interface ContextSource {
   id: string
   name: string
   kind: ContextKind
   url?: string
   rawText: string
+  /** Pages crawled from an llms.txt's links; `contentHash` covers them too. */
+  linked?: LinkedPage[]
   contentHash: string
   fetchedAt?: number
   condensed?: ContextDigest
