@@ -13,9 +13,9 @@ export const TargetPicker: FC<TargetPickerProps> = ({ targets, onChange }) => {
   const [lang, setLang] = useState('es')
   const [region, setRegion] = useState('')
 
-  const add = (): void => {
+  const add = (code = lang): void => {
     const trimmedRegion = region.trim()
-    const candidate: Target = trimmedRegion ? { lang, region: trimmedRegion } : { lang }
+    const candidate: Target = trimmedRegion ? { lang: code, region: trimmedRegion } : { lang: code }
     if (targets.some((t) => targetKey(t) === targetKey(candidate))) return
     onChange([...targets, candidate])
     setRegion('')
@@ -49,7 +49,11 @@ export const TargetPicker: FC<TargetPickerProps> = ({ targets, onChange }) => {
       <div className="flex flex-wrap items-center gap-2">
         <LanguageCombobox
           value={lang}
-          onChange={setLang}
+          onChange={(code) => {
+            // Picking a language (Enter or click) adds it right away, with the region if one is typed.
+            setLang(code)
+            add(code)
+          }}
           onSubmit={add}
           ariaLabel="Language"
           className="w-64"
@@ -64,7 +68,7 @@ export const TargetPicker: FC<TargetPickerProps> = ({ targets, onChange }) => {
           }}
           aria-label="Region"
         />
-        <Button onClick={add}>Add target</Button>
+        <Button onClick={() => add()}>Add target</Button>
       </div>
     </div>
   )
