@@ -4,12 +4,13 @@ import { type FC, useMemo, useState } from 'react'
 import { browserFetch } from '../adapters/browserFetch'
 import { storage } from '../adapters/dexieStorage'
 import { logger } from '../adapters/logger'
-import { LANGUAGES, languageName } from '../data/languages'
+import { languageName } from '../data/languages'
 import { useRepo } from '../hooks/useRepo'
 import { type ContextInputMode, createContextSource, withLinkedPages } from '../lib/contextSources'
 import { TEXT_FILE_ACCEPT } from '../lib/files'
 import { normalizeUrl } from '../lib/url'
 import { $settings, numberSetting } from '../stores/settings'
+import { LanguageCombobox } from './LanguageCombobox'
 import { Button, Card, Field, inputClass } from './ui'
 
 type Mode = ContextInputMode
@@ -95,14 +96,12 @@ const AddSourceForm: FC<{ onAdd: (s: ContextSource) => Promise<void> }> = ({ onA
           </Field>
         ) : null}
         <Field label="Only for target language (optional)">
-          <select className={inputClass} value={lang} onChange={(e) => setLang(e.target.value)}>
-            <option value="">All languages</option>
-            {LANGUAGES.map((l) => (
-              <option key={l.code} value={l.code}>
-                {languageName(l.code)}
-              </option>
-            ))}
-          </select>
+          <LanguageCombobox
+            ariaLabel="Only for target language (optional)"
+            value={lang}
+            onChange={setLang}
+            extraOptions={[{ value: '', label: 'All languages' }]}
+          />
         </Field>
         {error ? <p className="text-sm text-red-700">{error}</p> : null}
         <Button

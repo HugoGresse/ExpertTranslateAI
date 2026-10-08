@@ -11,9 +11,10 @@ import { storage } from '../adapters/dexieStorage'
 import { createBrowserLlm } from '../adapters/engineFactory'
 import { $apiKey } from '../adapters/keyVault'
 import { logger } from '../adapters/logger'
-import { LANGUAGES, languageName } from '../data/languages'
+import { languageName } from '../data/languages'
 import { useRepo } from '../hooks/useRepo'
 import { $settings } from '../stores/settings'
+import { LanguageCombobox } from './LanguageCombobox'
 import { Button, Card, Field, inputClass } from './ui'
 
 const KINDS: GuidelineKind[] = ['keep', 'must', 'must-not', 'prefer']
@@ -115,21 +116,15 @@ const SetEditor: FC<{
             />
           </Field>
           <Field label="Only for target language (optional)">
-            <select
-              className={inputClass}
+            <LanguageCombobox
+              ariaLabel="Only for target language (optional)"
               value={set.lang ?? ''}
-              onChange={(e) => {
+              onChange={(v) => {
                 const { lang: _old, ...rest } = set
-                setSet(e.target.value ? { ...rest, lang: e.target.value } : rest)
+                setSet(v ? { ...rest, lang: v } : rest)
               }}
-            >
-              <option value="">All languages</option>
-              {LANGUAGES.map((l) => (
-                <option key={l.code} value={l.code}>
-                  {languageName(l.code)}
-                </option>
-              ))}
-            </select>
+              extraOptions={[{ value: '', label: 'All languages' }]}
+            />
           </Field>
         </div>
         <Field

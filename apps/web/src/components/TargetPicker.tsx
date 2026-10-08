@@ -1,6 +1,7 @@
 import { type Target, targetKey } from '@experttranslate/core'
 import { type FC, useState } from 'react'
-import { LANGUAGES, languageLabel, languageName } from '../data/languages'
+import { languageLabel } from '../data/languages'
+import { LanguageCombobox } from './LanguageCombobox'
 import { Button, inputClass } from './ui'
 
 export interface TargetPickerProps {
@@ -46,23 +47,21 @@ export const TargetPicker: FC<TargetPickerProps> = ({ targets, onChange }) => {
         ) : null}
       </ul>
       <div className="flex flex-wrap items-center gap-2">
-        <select
-          className={inputClass}
+        <LanguageCombobox
           value={lang}
-          onChange={(e) => setLang(e.target.value)}
-          aria-label="Language"
-        >
-          {LANGUAGES.map((l) => (
-            <option key={l.code} value={l.code}>
-              {languageName(l.code)}
-            </option>
-          ))}
-        </select>
+          onChange={setLang}
+          onSubmit={add}
+          ariaLabel="Language"
+          className="w-64"
+        />
         <input
           className={`${inputClass} w-40`}
           placeholder="Region (optional)"
           value={region}
           onChange={(e) => setRegion(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.nativeEvent.isComposing) add()
+          }}
           aria-label="Region"
         />
         <Button onClick={add}>Add target</Button>

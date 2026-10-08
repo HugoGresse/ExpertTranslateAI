@@ -9,12 +9,13 @@ import { useStore } from '@nanostores/react'
 import { type FC, useMemo, useState } from 'react'
 import { storage } from '../adapters/dexieStorage'
 import { logger } from '../adapters/logger'
-import { LANGUAGES, languageName } from '../data/languages'
+import { languageName } from '../data/languages'
 import { useRepo } from '../hooks/useRepo'
 import { parseCsv, toCsv } from '../lib/csv'
 import { downloadText } from '../lib/download'
 import { pickOneOf } from '../lib/guards'
 import { $targets } from '../stores/settings'
+import { LanguageCombobox } from './LanguageCombobox'
 import { Button, Card, Field, inputClass } from './ui'
 
 const KINDS: GlossaryKind[] = ['preferred', 'forbidden', 'doNotTranslate']
@@ -69,14 +70,12 @@ const ScopeForm: FC<{ scopes: GlossaryScope[]; onSave: (s: GlossaryScope) => Pro
         </select>
       </Field>
       <Field label="Language (optional)">
-        <select className={inputClass} value={lang} onChange={(e) => setLang(e.target.value)}>
-          <option value="">Any</option>
-          {LANGUAGES.map((l) => (
-            <option key={l.code} value={l.code}>
-              {languageName(l.code)}
-            </option>
-          ))}
-        </select>
+        <LanguageCombobox
+          ariaLabel="Language (optional)"
+          value={lang}
+          onChange={setLang}
+          extraOptions={[{ value: '', label: 'Any' }]}
+        />
       </Field>
       <Field label="Parent scope (optional)">
         <select
@@ -145,18 +144,7 @@ const EntryForm: FC<{
         onChange={(e) => setTarget(e.target.value)}
         aria-label="Target rendering"
       />
-      <select
-        className={inputClass}
-        value={lang}
-        onChange={(e) => setLang(e.target.value)}
-        aria-label="Entry language"
-      >
-        {LANGUAGES.map((l) => (
-          <option key={l.code} value={l.code}>
-            {languageName(l.code)}
-          </option>
-        ))}
-      </select>
+      <LanguageCombobox value={lang} onChange={setLang} ariaLabel="Entry language" />
       <select
         className={inputClass}
         value={kind}

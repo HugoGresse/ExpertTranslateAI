@@ -15,7 +15,7 @@ import { storage } from '../adapters/dexieStorage'
 import { createEngineHandle } from '../adapters/engineFactory'
 import { $apiKey } from '../adapters/keyVault'
 import { logger } from '../adapters/logger'
-import { LANGUAGES, languageLabel, languageName } from '../data/languages'
+import { languageLabel, languageName } from '../data/languages'
 import { useModels } from '../hooks/useModels'
 import { useRepo } from '../hooks/useRepo'
 import { pickOneOf } from '../lib/guards'
@@ -41,6 +41,7 @@ import {
 } from '../stores/settings'
 import { ContextQuickAdd } from './ContextQuickAdd'
 import { FirstRunCard } from './FirstRunCard'
+import { LanguageCombobox } from './LanguageCombobox'
 import { BriefCard } from './ResultDetails'
 import { ResultPanel } from './ResultPanel'
 import { RunStatus } from './RunStatus'
@@ -549,18 +550,12 @@ export const TranslateWorkspace: FC = () => {
                 {styleOpen ? (
                   <div className="mt-2 grid gap-2">
                     <Field label="Source language">
-                      <select
-                        className={inputClass}
+                      <LanguageCombobox
+                        ariaLabel="Source language"
                         value={settings.sourceLang}
-                        onChange={(e) => $settings.setKey('sourceLang', e.target.value)}
-                      >
-                        <option value="auto">Auto-detect</option>
-                        {LANGUAGES.map((l) => (
-                          <option key={l.code} value={l.code}>
-                            {languageName(l.code)}
-                          </option>
-                        ))}
-                      </select>
+                        onChange={(v) => $settings.setKey('sourceLang', v)}
+                        extraOptions={[{ value: 'auto', label: 'Auto-detect' }]}
+                      />
                     </Field>
                     <Field label="Formality">
                       <select
