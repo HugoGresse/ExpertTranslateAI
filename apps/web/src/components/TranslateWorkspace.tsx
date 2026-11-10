@@ -486,9 +486,7 @@ export const TranslateWorkspace: FC = () => {
               <dt className="pt-1 font-semibold text-body">Glossary</dt>
               <dd className="flex flex-wrap items-center gap-1.5">
                 {glossaryScopes.items.length === 0 ? (
-                  <span className="text-xs text-muted">
-                    None yet. Terms get suggested after each run.
-                  </span>
+                  <span className="text-xs text-muted">None yet.</span>
                 ) : null}
                 {glossaryScopes.items.map((g) => (
                   <Chip
@@ -500,6 +498,16 @@ export const TranslateWorkspace: FC = () => {
                     {g.name}
                   </Chip>
                 ))}
+                <label className="flex basis-full items-center gap-2 pt-1 text-xs text-body">
+                  <input
+                    type="checkbox"
+                    checked={settings.suggestGlossary === 'true'}
+                    onChange={(e) =>
+                      $settings.setKey('suggestGlossary', e.target.checked ? 'true' : 'false')
+                    }
+                  />
+                  Suggest new terms after each run
+                </label>
               </dd>
             </div>
             <div className="grid grid-cols-[88px_1fr] gap-3 py-3">

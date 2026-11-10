@@ -65,7 +65,7 @@ flowchart TB
     end
     audit["Rule checks and score<br/>6 dimensions and confidence"]
     back["Back-translation<br/>meaning deltas"]
-    suggest["Glossary suggestions"]
+    suggest["Glossary suggestions<br/>opt-in"]
   end
 
   result["Final text, reports, trace, cost<br/>evaluation record"]
@@ -81,7 +81,7 @@ flowchart TB
   finalize -->|"reassembled, placeholders restored"| audit
   audit -.->|"high disagreement or low confidence:<br/>rerun affected chunks one level up"| translate
   audit -->|"critical, or opt-in"| back
-  audit -->|"normal and above"| suggest
+  audit -->|"opt-in, normal and above"| suggest
   back -->|"deltas"| result
   suggest -->|"term pairs"| result
   audit -->|"score and reports"| result
@@ -221,8 +221,9 @@ translation is a long-standing reference-free quality signal (Moon et al., 2020)
 
 - **Save as correction.** Edit the final text and save: changed sentences are written to the
   translation memory as human corrections and reused verbatim next time.
-- **Glossary suggestions.** After a run, a helper model proposes source → target term pairs that
-  are not in the glossary yet; pick the ones to add to a glossary scope.
+- **Glossary suggestions.** Opt-in (off by default, toggled in the recipe's Glossary row): after a
+  run, a helper model proposes source → target term pairs that are not in the glossary yet; pick
+  the ones to add to a glossary scope.
 - **Insights.** Each target writes an evaluation record (models, language, domain, difficulty,
   score, confidence, violations, escalations, cost, human edits). `/insights` groups them by
   translator, domain, language, difficulty or prompt version to show average score, cost per

@@ -20,7 +20,7 @@ export const DEFAULT_JOB_OPTIONS: Omit<
   backTranslate: false,
   promptOverrides: {},
   formality: 'auto',
-  suggestGlossary: true,
+  suggestGlossary: false,
 }
 
 export type RoleModelOverrides = Partial<RoleModels> & { translatorA: string }

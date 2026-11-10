@@ -44,6 +44,20 @@ export type Settings = {
 
 export { DEFAULT_MODEL }
 
+/**
+ * Term suggestions used to be on with no toggle, so a stored `'true'` is the old default rather
+ * than a choice. Reset it once, before the map reads storage, so suggestions start off for everyone.
+ */
+const SUGGEST_GLOSSARY_OPT_IN = 'eta.migrations.suggestGlossaryOptIn'
+try {
+  if (typeof localStorage !== 'undefined' && !localStorage.getItem(SUGGEST_GLOSSARY_OPT_IN)) {
+    localStorage.removeItem('eta.settings.suggestGlossary')
+    localStorage.setItem(SUGGEST_GLOSSARY_OPT_IN, 'done')
+  }
+} catch {
+  // Storage blocked: the map falls back to its defaults anyway.
+}
+
 export const $settings = persistentMap<Settings>('eta.settings.', {
   translatorModel: DEFAULT_MODEL,
   translatorBModel: '',
@@ -61,7 +75,7 @@ export const $settings = persistentMap<Settings>('eta.settings.', {
   autoEscalate: 'true',
   escalationConfidence: '60',
   backTranslate: 'false',
-  suggestGlossary: 'true',
+  suggestGlossary: 'false',
   contextTokenBudget: '4000',
   guidelinesTokenBudget: '1500',
   sourceLang: 'auto',

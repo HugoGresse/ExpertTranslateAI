@@ -47,6 +47,8 @@ test('normal difficulty runs brief, two translators, review, finalize and score'
     localStorage.setItem('eta.settings.scorerModel', 'test/scorer')
     localStorage.setItem('eta.settings.helperModel', 'test/helper')
     localStorage.setItem('eta.settings.difficulty', 'auto')
+    localStorage.setItem('eta.settings.suggestGlossary', 'true')
+    localStorage.setItem('eta.migrations.suggestGlossaryOptIn', 'done')
     localStorage.setItem('eta.targets', JSON.stringify([{ lang: 'fr' }]))
   })
   const models: string[] = []
