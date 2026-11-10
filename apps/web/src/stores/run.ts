@@ -166,6 +166,10 @@ const patchTarget = (
   $run.setKey('targets', { ...targets, [key]: { ...current, ...delta } })
 }
 
+/** Keeps a saved human edit on the run, so the bundle download carries it. */
+export const setFinalText = (key: string, finalText: string): void =>
+  patchTarget(key, (p) => (p.result ? { result: { ...p.result, finalText } } : {}))
+
 type PreviewStage = keyof TargetPreview
 
 const previewStageOf = (stage: StageName, role: string): PreviewStage | null =>

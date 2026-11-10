@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises'
 import { expect, type Page, test } from '@playwright/test'
 import { sse } from './helpers'
 
@@ -76,6 +77,20 @@ test('translates into two languages with placeholders restored and stores histor
   )
   await expect(page.getByText(/Total: 2 calls/)).toBeVisible()
   expect(seenModels).toEqual(['test/model', 'test/model'])
+
+  await page.getByLabel('Download format').selectOption('json')
+  const [download] = await Promise.all([
+    page.waitForEvent('download'),
+    page.getByRole('button', { name: 'Download all (2)' }).click(),
+  ])
+  expect(download.suggestedFilename()).toBe('translations.json')
+  const bundle = JSON.parse(await readFile(await download.path(), 'utf8')) as {
+    translations: { lang: string; region: string | null; text: string }[]
+  }
+  expect(bundle.translations.map((t) => [t.lang, t.region, t.text])).toEqual([
+    ['fr', null, 'Bonjour fr {{name}} https://example.com'],
+    ['es', 'Mexico', 'Bonjour es {{name}} https://example.com'],
+  ])
 
   await page.goto('/history')
   await expect(

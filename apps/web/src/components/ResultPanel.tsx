@@ -14,7 +14,8 @@ import { storage } from '../adapters/dexieStorage'
 import { logger } from '../adapters/logger'
 import { languageLabel, textDirection } from '../data/languages'
 import { downloadText } from '../lib/download'
-import { $previews, previewChunks, type TargetProgress } from '../stores/run'
+import { buildExport, EXPORT_FORMATS, type ExportFormat } from '../lib/exportAll'
+import { $previews, previewChunks, setFinalText, type TargetProgress } from '../stores/run'
 import { BackTranslationCard } from './BackTranslationCard'
 import { GlossarySuggestionsCard } from './GlossarySuggestionsCard'
 import { PipelineBoard, type PipelineBoardProps } from './PipelineBoard'
@@ -25,7 +26,7 @@ import {
   ScoreCard,
   TerminologyReport,
 } from './ResultDetails'
-import { Button, formatUsd } from './ui'
+import { Button, formatUsd, inputClass } from './ui'
 
 export interface ResultPanelProps {
   targets: Record<string, TargetProgress>
@@ -118,6 +119,7 @@ const FinalText: FC<{ result: TargetResult }> = ({ result }) => {
       await markHumanEdited(result, text)
       // Keep the edit on the stored result so reopening the job from history shows it.
       await storage.results.put({ ...result, finalText: text })
+      setFinalText(result.targetKey, text)
       logger.info('memory.learned', { lang: result.lang, count: entries.length })
       setSaved(
         entries.length === 0
@@ -225,6 +227,32 @@ const StreamPreview: FC<{ targetKey: string; progress: TargetProgress }> = ({
   )
 }
 
+/** One file with every language, offered once all targets have finished. */
+const DownloadAll: FC<{ results: TargetResult[] }> = ({ results }) => {
+  const [format, setFormat] = useState<ExportFormat>('txt')
+  const download = (): void => {
+    const file = buildExport(results, format)
+    downloadText(file.filename, file.text, file.type)
+  }
+  return (
+    <div className="flex items-center gap-1">
+      <select
+        className={inputClass}
+        value={format}
+        onChange={(e) => setFormat(e.target.value === 'json' ? 'json' : 'txt')}
+        aria-label="Download format"
+      >
+        {EXPORT_FORMATS.map((f) => (
+          <option key={f} value={f}>
+            .{f}
+          </option>
+        ))}
+      </select>
+      <Button onClick={download}>Download all ({results.length})</Button>
+    </div>
+  )
+}
+
 export const ResultPanel: FC<ResultPanelProps> = ({ targets, board, trailing, above }) => {
   const langs = Object.keys(targets)
   const [active, setActive] = useState(langs[0] ?? '')
@@ -232,6 +260,10 @@ export const ResultPanel: FC<ResultPanelProps> = ({ targets, board, trailing, ab
     if (!langs.includes(active) && langs[0]) setActive(langs[0])
   }, [langs, active])
   const current = targets[active]
+  const finished = Object.values(targets).flatMap((t) =>
+    t.status === 'done' && t.result ? [t.result] : [],
+  )
+  const allDone = langs.length > 0 && finished.length === langs.length
   if (!current) return null
 
   return (
@@ -262,7 +294,12 @@ export const ResultPanel: FC<ResultPanelProps> = ({ targets, board, trailing, ab
             )
           })}
         </div>
-        {trailing ? <div className="pb-2">{trailing}</div> : null}
+        {trailing || allDone ? (
+          <div className="flex flex-wrap items-center gap-3 pb-2">
+            {allDone ? <DownloadAll results={finished} /> : null}
+            {trailing}
+          </div>
+        ) : null}
       </div>
       {above ? <div className="pt-3">{above}</div> : null}
       <div className="flex flex-col gap-4 pt-4">
